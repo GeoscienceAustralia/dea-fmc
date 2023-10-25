@@ -29,7 +29,7 @@ The products indexed into the existing database dump are:
   datacube product add https://raw.githubusercontent.com/GeoscienceAustralia/dea-config/master/products/baseline_satellite_data/c3/ga_s2am_ard_3.odc-product.yaml
 
   # - Index datasets
-  https://data.dea.ga.gov.au/baseline/ga_s2am_ard_3/55/HGA/2019/11/21/20191121T011741/ga_s2am_ard_3-2-1_55HGA_2019-11-21_final.stac-item.json 
+  datacube dataset add --ignore-lineage https://data.dea.ga.gov.au/baseline/ga_s2am_ard_3/55/HGA/2019/11/21/20191121T011741/ga_s2am_ard_3-2-1_55HGA_2019-11-21_final.odc-metadata.yaml
   
   pg_dump -U odcuser -p 5432 -h postgres odc > dump.sql
   # Enter password on prompt: odcpass or to check echo $DB_PASSWORD
