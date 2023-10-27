@@ -10,20 +10,47 @@ services:
     ports:
       - "5432:5432"
     restart: always
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "127.0.0.1:4566:4566"
+      - "127.0.0.1:4510-4559:4510-4559"
+    environment:
+      SERVICES: sqs 
+      DATA_DIR: /tmp/localstack/data
+      DOCKER_HOST: unix:///var/run/docker.sock
+      QUEUE_NAME: my-queue
+    volumes:
+      - "./docker/localstack.sh:/docker-entrypoint-initaws.d/localstack.sh"
+      - "./docker/localstack.sh:/etc/localstack/init/ready.d/init-aws.sh"  # https://docs.localstack.cloud/references/init-hooks/
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
   fmc:
     build:
       context: .
     links:
       - postgres:postgres
+      - localstack:localstack
     environment:
       DB_PORT: 5432
       DB_HOSTNAME: postgres
       DB_USERNAME: odcuser
       DB_PASSWORD: odcpass
       DB_DATABASE: odc
-      AWS_NO_SIGN_REQUEST: "yes"
+      #AWS_NO_SIGN_REQUEST: "yes"
       GDAL_HTTP_MAX_RETRY: 5
+      AWS_ACCESS_KEY_ID: dummy
+      AWS_SECRET_ACCESS_KEY: dummy
+      AWS_DEFAULT_REGION: ap-southeast-2
+      AWS_ENDPOINT_URL: http://localstack:4566
+      QUEUE_NAME: my-queue
+      MODEL_PATH: /app/fmc/rf_fmc.pickle
     depends_on:
       - postgres
+      - localstack
     restart: always
     command: tail -f /dev/null
+    volumes:
+      - ./:/app
+volumes:
+  sqs: null

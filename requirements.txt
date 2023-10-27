@@ -1,3 +1,9 @@
 --extra-index-url=https://packages.dea.ga.gov.au/
 datacube[s3,performance]==1.8.13
 numpy==1.23.5
+odc-geo==0.4.0
+dask-ml==1.6.0
+dea_tools==0.2.8.dev117
+scikit-learn==0.23.2
+boto3
+click
