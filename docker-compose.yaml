@@ -16,10 +16,11 @@ services:
       - "127.0.0.1:4566:4566"
       - "127.0.0.1:4510-4559:4510-4559"
     environment:
-      SERVICES: sqs 
+      SERVICES: sqs, s3
       DATA_DIR: /tmp/localstack/data
       DOCKER_HOST: unix:///var/run/docker.sock
       QUEUE_NAME: my-queue
+      BUCKET_NAME: my-bucket
     volumes:
       - "./docker/localstack.sh:/docker-entrypoint-initaws.d/localstack.sh"
       - "./docker/localstack.sh:/etc/localstack/init/ready.d/init-aws.sh"  # https://docs.localstack.cloud/references/init-hooks/
@@ -47,6 +48,7 @@ services:
       AWS_ENDPOINT_URL: http://localstack:4566
       AWS_ENDPOINT_SQS_URL: http://localstack:4566
       QUEUE_NAME: my-queue
+      BUCKET_NAME: my-bucket
       MODEL_PATH: /app/fmc/rf_fmc.pickle
     depends_on:
       - postgres
