@@ -33,4 +33,4 @@ def process(dataset_id, model_path):
 
     predicted = predict.compute()
 
-    print(predicted)
+    return predicted
