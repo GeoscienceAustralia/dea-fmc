@@ -28,21 +28,24 @@ services:
   fmc:
     build:
       context: .
+    working_dir: /app
     links:
       - postgres:postgres
       - localstack:localstack
+    ports:
+      - "8787:8787"  # dask UI
     environment:
       DB_PORT: 5432
       DB_HOSTNAME: postgres
       DB_USERNAME: odcuser
       DB_PASSWORD: odcpass
       DB_DATABASE: odc
-      #AWS_NO_SIGN_REQUEST: "yes"
       GDAL_HTTP_MAX_RETRY: 5
       AWS_ACCESS_KEY_ID: dummy
       AWS_SECRET_ACCESS_KEY: dummy
       AWS_DEFAULT_REGION: ap-southeast-2
       AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ENDPOINT_SQS_URL: http://localstack:4566
       QUEUE_NAME: my-queue
       MODEL_PATH: /app/fmc/rf_fmc.pickle
     depends_on:

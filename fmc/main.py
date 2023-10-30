@@ -1,6 +1,7 @@
 import boto3
 import json
 import fmc.model as model
+import time
 
 def read_dataset(message):
     stac_doc = json.loads(message)
@@ -18,17 +19,20 @@ def send(queue_url, message_path):
         MessageBody=file_contents
     )
 
-
 def handle(queue_url, model_path):
     sqs = boto3.client("sqs")
     response = sqs.receive_message(
-        QueueUrl=queue_url
+        QueueUrl=queue_url,
+        WaitTimeSeconds=5
     )
+    print(response)
     message = response['Messages'][0]
     receipt_handle = message['ReceiptHandle']
 
-    dataset_id = read_dataset(message['Body'])
-    model.process(dataset_id, model_path)
+    print(message)
+    stac_doc = json.loads(message['Body'])
+    dataset_id = stac_doc['id']
+    output_data = model.process(dataset_id, model_path)
 
     # process
     sqs.delete_message(
