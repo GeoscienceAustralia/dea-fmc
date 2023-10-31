@@ -21,6 +21,7 @@ services:
       DOCKER_HOST: unix:///var/run/docker.sock
       QUEUE_NAME: my-queue
       BUCKET_NAME: my-bucket
+      AWS_DEFAULT_REGION: ap-southeast-2
     volumes:
       - "./docker/localstack.sh:/docker-entrypoint-initaws.d/localstack.sh"
       - "./docker/localstack.sh:/etc/localstack/init/ready.d/init-aws.sh"  # https://docs.localstack.cloud/references/init-hooks/
@@ -46,7 +47,6 @@ services:
       AWS_SECRET_ACCESS_KEY: dummy
       AWS_DEFAULT_REGION: ap-southeast-2
       AWS_ENDPOINT_URL: http://localstack:4566
-      AWS_ENDPOINT_SQS_URL: http://localstack:4566
       QUEUE_NAME: my-queue
       BUCKET_NAME: my-bucket
       MODEL_PATH: /app/fmc/rf_fmc.pickle

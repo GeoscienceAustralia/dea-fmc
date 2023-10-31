@@ -9,3 +9,4 @@ boto3
 click
 eodatasets3
 odc-apps-dc-tools
+awscli

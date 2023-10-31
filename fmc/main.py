@@ -21,30 +21,29 @@ def send(queue_url, message_path):
     )
 
 def handle(queue_url, model_path):
-    print(queue_url, model_path)
-    # sqs = boto3.client("sqs")
-    # response = sqs.receive_message(
-    #     QueueUrl=queue_url,
-    #     WaitTimeSeconds=5
-    # )
-    # message = response['Messages'][0]
-    # receipt_handle = message['ReceiptHandle']
+    sqs = boto3.client("sqs")
+    response = sqs.receive_message(
+        QueueUrl=queue_url,
+        WaitTimeSeconds=5
+    )
+    message = response['Messages'][0]
+    receipt_handle = message['ReceiptHandle']
 
-    # stac_doc = json.loads(message['Body'])
-    # dataset_id = stac_doc['id']
+    stac_doc = json.loads(message['Body'])
+    dataset_id = stac_doc['id']
 
-    # # process
-    # output_data = model.process(dataset_id, model_path)
-    # print(output_data)
+    # process
+    output_data = model.process(dataset_id, model_path)
+    print(output_data)
 
-    import pickle
-    with open('dataset.xarray.bin', 'rb') as f:
-        output_data = pickle.load(f)
-    dataset_id = "52dda32c-cb4b-49eb-a31d-bcf70bf62751"
+    # import pickle
+    # with open('dataset.xarray.bin', 'rb') as f:
+    #     output_data = pickle.load(f)
+    # dataset_id = "52dda32c-cb4b-49eb-a31d-bcf70bf62751"
 
     save(dataset_id, output_data)
 
-    # sqs.delete_message(
-    #     QueueUrl=queue_url,
-    #     ReceiptHandle=receipt_handle
-    # )
+    sqs.delete_message(
+        QueueUrl=queue_url,
+        ReceiptHandle=receipt_handle
+    )
