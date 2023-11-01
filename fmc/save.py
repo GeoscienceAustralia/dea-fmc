@@ -86,7 +86,7 @@ def save(dataset_id, output_data):
         classifier="ard"
     )
 
-    dataset_assembler.properties["dea:dataset_maturity"] = "interim"
+    dataset_assembler.properties["dea:dataset_maturity"] = source_doc.properties["dea:dataset_maturity"]
     dataset_assembler.properties["dea:product_maturity"] = "provisional"
     dataset_assembler.properties["odc:product"] = "ga_s2_fmc_provisional_3"
     dataset_assembler.properties["odc:dataset_version"] = "0.1"
@@ -108,9 +108,10 @@ def save(dataset_id, output_data):
         nodata=0,  # TODO: check this
     )
 
-    dataset_assembler.write_thumbnail_singleband(
-        measurement="Predictions",
-        bit=1  # TODO: check
+    dataset_assembler.write_thumbnail(
+        red="fmc",
+        green="fmc",
+        blue="fmc",
     )
 
     dataset_id, metadata_path = dataset_assembler.done()

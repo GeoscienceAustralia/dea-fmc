@@ -1,1 +1,1 @@
-from .main import handle, send
+from .main import handle

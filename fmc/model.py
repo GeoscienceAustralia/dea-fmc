@@ -30,6 +30,7 @@ def process(dataset_id, model_path):
         'nbart_nir_1','nbart_nir_2','nbart_swir_2','nbart_swir_3']]
 
     predict = predict_xr(skl_model, ds, proba=False, persist=False, clean=True, return_input=False)
+    predict = predict.rename({'Predictions': 'fmc'})
 
     predicted = predict.compute()
 
