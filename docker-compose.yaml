@@ -49,13 +49,16 @@ services:
       AWS_ENDPOINT_URL: http://localstack:4566
       QUEUE_NAME: my-queue
       BUCKET_NAME: my-bucket
-      MODEL_PATH: /app/fmc/rf_fmc.pickle
+      MODEL_PATH: /app/rf_fmc.pickle
+      QUEUE_URL: http://localstack:4566/000000000000/my-queue
     depends_on:
       - postgres
       - localstack
     restart: always
     command: tail -f /dev/null
-    volumes:
-      - ./:/app
+
+#    volumes:
+#      - ./:/app
+
 volumes:
   sqs: null

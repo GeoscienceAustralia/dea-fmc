@@ -9,7 +9,7 @@ def read_dataset(message):
     dataset_id = stac_doc['id']
     return dataset_id
 
-def handle(queue_url, model_path):
+def handle(queue_url, model_path, s3_prefix, explorer_url):
     sqs = boto3.client("sqs")
     response = sqs.receive_message(
         QueueUrl=queue_url,
@@ -29,7 +29,7 @@ def handle(queue_url, model_path):
     # process
     output_data = model.process(dataset_id, model_path)
 
-    save(dataset_id, output_data)
+    save(dataset_id, output_data, s3_prefix, explorer_url)
 
     sqs.delete_message(
         QueueUrl=queue_url,

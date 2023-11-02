@@ -50,7 +50,7 @@ def _write_stac(
     return stac
 
 
-def save(dataset_id, output_data):
+def save(dataset_id, output_data, s3_prefix, explorer_url):
     dc = datacube.Datacube()
     dcds = dc.index.datasets.get(dataset_id)
 
@@ -99,7 +99,7 @@ def save(dataset_id, output_data):
 
     dataset_assembler.note_software_version(
         "fmc",
-        "https://github.com/jmettes/fmc",
+        "https://github.com/GeoscienceAustralia/dea-fmc",
         version,
     )
 
@@ -118,11 +118,11 @@ def save(dataset_id, output_data):
 
     relative_path = dataset_assembler.names.dataset_folder
     dataset_location = Path(temp_dir.name) / relative_path
-    destination_path = (
-        f"s3://my-bucket/derivative/{relative_path}"
-    )
 
-    explorer_url = "https://explorer.dev.dea.ga.gov.au"
+    s3_prefix = s3_prefix.rstrip("/")
+    destination_path = (
+        f"{s3_prefix}/{relative_path}"
+    )
 
     stac = _write_stac(metadata_path, destination_path, explorer_url, dataset_assembler)
 

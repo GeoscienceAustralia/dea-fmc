@@ -20,6 +20,7 @@ def process(dataset_id, model_path):
                     "nbart_nir_1","nbart_nir_2",
                     "nbart_swir_2","nbart_swir_3"]
  
+    # TODO: should output_crs be EPSG:3577?
     ds = dc.load(id=dcds.id, product=dcds.product.name, measurements=measurements, dask_chunks = {'x': 1000, 'y': 1000}, output_crs=dcds.crs)
 
     ds['ndvi']=((ds.nbart_nir_1-ds.nbart_red)/(ds.nbart_nir_1+ds.nbart_red))

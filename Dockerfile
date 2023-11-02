@@ -25,11 +25,11 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/requirements.txt
 
-# ENV APPDIR=/code
-# RUN mkdir -p $APPDIR
-# WORKDIR $APPDIR
-# ADD . $APPDIR
+ENV APPDIR=/app
+RUN mkdir -p $APPDIR
+WORKDIR $APPDIR
+ADD . $APPDIR
 
-# CMD ["python", "--version"]
+RUN pip install .
 
-# RUN 
+CMD ["fmc", "--help"]
