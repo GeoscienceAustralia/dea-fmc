@@ -1,35 +1,40 @@
-FROM osgeo/gdal:ubuntu-small-3.4.1 as base
+FROM osgeo/gdal:ubuntu-small-3.6.3
 
-ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV DEBIAN_FRONTEND=noninteractive \
+    LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8
 
-RUN apt-get update \
-    && apt-get install -y \
-    # Build tools
-    build-essential \
-    git \
-    python3-pip \
-    # For Psycopg2
-    libpq-dev python3-dev \
-    # For SSL
-    ca-certificates \
-    # for pg_isready
-    postgresql-client \
-    # Try adding libgeos-dev
-    libgeos-dev \
-    # Tidy up
+# Apt installation
+RUN apt-get update && \
+    apt-get install -y \
+      build-essential \
+      fish \
+      git \
+      vim \
+      htop \
+      wget \
+      unzip \
+      python3-pip \
+      libpq-dev python3-dev \
     && apt-get autoclean && \
     apt-get autoremove && \
     rm -rf /var/lib/{apt,dpkg,cache,log}
 
-COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r /tmp/requirements.txt
+# Pip installation
+RUN mkdir -p /conf
+COPY requirements.txt /conf/
+COPY constraints.txt /conf/
+RUN pip install -r /conf/requirements.txt -c /conf/constraints.txt
 
-ENV APPDIR=/app
-RUN mkdir -p $APPDIR
-WORKDIR $APPDIR
-ADD . $APPDIR
+# Copy source code and install it
+RUN mkdir -p /code
+WORKDIR /code
+ADD . /code
 
-RUN pip install .
+RUN echo "Installing dea-fmc through the Dockerfile."
+RUN pip install --extra-index-url="https://packages.dea.ga.gov.au" .
 
-CMD ["fmc", "--help"]
+RUN pip freeze && pip check
+
+# Make sure it's working
+RUN dea-fmc --version
