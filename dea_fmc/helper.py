@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import boto3
 import botocore
 import fsspec
+import requests
 import yaml
 from datacube.utils.dates import normalise_dt
 

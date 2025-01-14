@@ -7,14 +7,12 @@ import click
 import datacube
 import joblib
 import numpy as np
-import requests
 import xarray as xr
 from datacube.utils.cog import write_cog
 from dea_tools.classification import sklearn_flatten, sklearn_unflatten
 from odc.algo import mask_cleanup
 
 import dea_fmc.__version__
-
 from dea_fmc import fmc_io, helper
 
 # Configure logging
@@ -42,8 +40,10 @@ def classify_fmc(data, model):
     Perform FMC classification using a pre-trained model.
 
     Args:
-        data (xarray.Dataset): Sentinel-2 dataset with required bands and optional multiple time steps.
-        model (sklearn.BaseEstimator): A pre-trained scikit-learn model for classification.
+        data (xarray.Dataset): Sentinel-2 dataset with required bands and
+        optional multiple time steps.
+        model (sklearn.BaseEstimator): A pre-trained scikit-learn model for
+        classification.
 
     Returns:
         xarray.Dataset: Dataset containing the classified FMC results.
@@ -91,7 +91,6 @@ def classify_fmc(data, model):
     )
 
     return dataset_result
-
 
 
 @click.group()
