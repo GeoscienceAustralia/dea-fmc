@@ -169,13 +169,13 @@ def fmc_processing(dataset_uuid, process_cfg_url, overwrite):
 
     # Create masks
     cloud_mask = (df.oa_fmask == 2) | (df.oa_fmask == 3)
-    water_mask = (df.oa_fmask == 5) | (df.oa_fmask == 0)
+    water_mask = (df.oa_fmask == 5) | (df.oa_fmask == 0) | (df.oa_nbart_contiguity == 0)
     better_cloud_mask = mask_cleanup(
         mask=cloud_mask, mask_filters=[("opening", 1), ("dilation", 3)]
     )
 
     # Drop unnecessary variables
-    df = df.drop_vars(["oa_fmask"])
+    df = df.drop_vars(["oa_fmask", 'oa_nbart_contiguity'])
 
     # Perform FMC classification
     fmc_data = classify_fmc(df, model)
