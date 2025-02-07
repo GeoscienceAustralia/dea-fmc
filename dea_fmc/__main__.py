@@ -2,12 +2,13 @@
 import logging
 import os
 import sys
-
 import click
 import datacube
 import joblib
 import numpy as np
 import xarray as xr
+import boto3  # for interacting with AWS SQS
+
 from datacube.utils.cog import write_cog
 from dea_tools.classification import sklearn_flatten, sklearn_unflatten
 from odc.algo import mask_cleanup
@@ -30,9 +31,9 @@ def logging_setup():
     ]
 
     stdout_hdlr = logging.StreamHandler(sys.stdout)
-    for logger in loggers:
-        logger.addHandler(stdout_hdlr)
-        logger.propagate = False
+    for logger_obj in loggers:
+        logger_obj.addHandler(stdout_hdlr)
+        logger_obj.propagate = False
 
 
 def classify_fmc(data, model):
@@ -40,10 +41,8 @@ def classify_fmc(data, model):
     Perform FMC classification using a pre-trained model.
 
     Args:
-        data (xarray.Dataset): Sentinel-2 dataset with required bands and
-        optional multiple time steps.
-        model (sklearn.BaseEstimator): A pre-trained scikit-learn model for
-        classification.
+        data (xarray.Dataset): Sentinel-2 dataset with required bands and optional multiple time steps.
+        model (sklearn.BaseEstimator): A pre-trained scikit-learn model for classification.
 
     Returns:
         xarray.Dataset: Dataset containing the classified FMC results.
@@ -93,39 +92,10 @@ def classify_fmc(data, model):
     return dataset_result
 
 
-@click.group()
-@click.version_option(version=dea_fmc.__version__)
-def main():
-    """Run dea-fmc."""
-
-
-@main.command(no_args_is_help=True)
-@click.option(
-    "--dataset-uuid",
-    "-d",
-    type=str,
-    required=True,
-)
-@click.option(
-    "--process-cfg-url",
-    "-p",
-    type=str,
-    required=True,
-    help="URL to FMC process configuration file in YAML format.",
-)
-@click.option(
-    "--overwrite/--no-overwrite",
-    default=False,
-    help="Rerun scenes that have already been processed.",
-)
-def fmc_processing(dataset_uuid, process_cfg_url, overwrite):
+def process_dataset(dataset_uuid, process_cfg_url, overwrite):
     """
     Process FMC for a given dataset UUID and configuration.
-
-    Args:
-        dataset_uuid (str): UUID of the dataset to process.
-        process_cfg_url (str): URL to the process configuration YAML file.
-        overwrite (bool): Whether to overwrite existing results.
+    This function encapsulates the processing logic and is used by both CLI commands.
     """
     logging_setup()
 
@@ -159,6 +129,24 @@ def fmc_processing(dataset_uuid, process_cfg_url, overwrite):
 
     # Load the dataset from Datacube
     dataset = dc.index.datasets.get(dataset_uuid)
+
+    # Define output file details
+    region_code = dataset.metadata.fields["region_code"]
+    acquisition_date = dataset.metadata.fields["time"][0].date().strftime("%Y-%m-%d")
+    local_tif = f"{product_name}_{region_code}_{acquisition_date}_fmc.tif"
+
+    s3_folder = (
+        f"{output_folder}/{product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
+        + acquisition_date.replace("-", "/")
+    )
+    s3_file_uri = f"{s3_folder}/{local_tif}"
+
+    # Check if the S3 object exists and handle the overwrite flag.
+    if not overwrite:
+        if helper.check_s3_file_exists(s3_file_uri):
+            logger.info(f"S3 object {s3_file_uri} already exists and overwrite is False. Skipping processing.")
+            return
+
     df = dc.load(
         datasets=[dataset],
         measurements=measurements_list,
@@ -175,7 +163,7 @@ def fmc_processing(dataset_uuid, process_cfg_url, overwrite):
     )
 
     # Drop unnecessary variables
-    df = df.drop_vars(["oa_fmask", 'oa_nbart_contiguity'])
+    df = df.drop_vars(["oa_fmask", "oa_nbart_contiguity"])
 
     # Perform FMC classification
     fmc_data = classify_fmc(df, model)
@@ -184,25 +172,132 @@ def fmc_processing(dataset_uuid, process_cfg_url, overwrite):
     masked_data = fmc_data.where(~better_cloud_mask & ~water_mask)
     masked_data = masked_data.where(masked_data >= 0, -999).astype("int16")
 
-    # Define output file details
-    region_code = dataset.metadata.fields["region_code"]
-    acquisition_date = dataset.metadata.fields["time"][0].date().strftime("%Y-%m-%d")
-    local_tif = f"{product_name}_{region_code}_{acquisition_date}_fmc.tif"
 
     # Save results to GeoTIFF
     write_cog(masked_data.LFMC, fname=local_tif, overwrite=True, nodata=-999)
     logger.info(f"Result saved as: {local_tif}")
 
     # Upload result to S3
-    s3_folder = (
-        f"{output_folder}/{product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
-        + acquisition_date.replace("-", "/")
-    )
-    s3_file_uri = f"{s3_folder}/{local_tif}"
-
     helper.get_and_set_aws_credentials()
     fmc_io.upload_object_to_s3(local_tif, s3_file_uri)
     logger.info(f"Uploaded result to: {s3_file_uri}")
+
+
+@click.group()
+@click.version_option(version=dea_fmc.__version__)
+def main():
+    """Run dea-fmc."""
+
+
+@main.command(no_args_is_help=True)
+@click.option(
+    "--dataset-uuid",
+    "-d",
+    type=str,
+    required=True,
+    help="Dataset UUID to process.",
+)
+@click.option(
+    "--process-cfg-url",
+    "-p",
+    type=str,
+    required=True,
+    help="URL to FMC process configuration file in YAML format.",
+)
+@click.option(
+    "--overwrite/--no-overwrite",
+    default=False,
+    help="Rerun scenes that have already been processed.",
+)
+def fmc_processing(dataset_uuid, process_cfg_url, overwrite):
+    """
+    Process FMC for a given dataset UUID and configuration.
+    """
+    process_dataset(dataset_uuid, process_cfg_url, overwrite)
+
+
+@main.command()
+@click.option(
+    "--dataset-uuid",
+    "-d",
+    type=str,
+    required=True,
+    help="Dataset UUID to submit to AWS SQS.",
+)
+@click.option(
+    "--queue-url",
+    "-q",
+    type=str,
+    required=True,
+    help="AWS SQS Queue URL to submit the message to.",
+)
+def submit_message(dataset_uuid, queue_url):
+    """
+    Submit a dataset UUID as a message to AWS SQS.
+    """
+    sqs = boto3.client("sqs")
+    response = sqs.send_message(QueueUrl=queue_url, MessageBody=dataset_uuid)
+    click.echo(f"Message submitted to SQS with MessageId: {response.get('MessageId')}")
+
+
+@main.command()
+@click.option(
+    "--queue-url",
+    "-q",
+    type=str,
+    required=True,
+    help="AWS SQS Queue URL to read messages from.",
+)
+@click.option(
+    "--process-cfg-url",
+    "-p",
+    type=str,
+    required=True,
+    help="URL to FMC process configuration file in YAML format.",
+)
+@click.option(
+    "--overwrite/--no-overwrite",
+    default=False,
+    help="Rerun scenes that have already been processed.",
+)
+def fmc_processing_with_sqs(queue_url, process_cfg_url, overwrite):
+    """
+    Continuously load messages from AWS SQS and process each dataset using FMC classification.
+    The function keeps polling the queue until 10 consecutive attempts return no messages.
+    """
+    sqs = boto3.client("sqs")
+    no_message_count = 0
+
+    while True:
+        response = sqs.receive_message(
+            QueueUrl=queue_url,
+            MaxNumberOfMessages=10,
+            WaitTimeSeconds=10  # long polling for up to 10 seconds
+        )
+        messages = response.get("Messages", [])
+        if not messages:
+            no_message_count += 1
+            click.echo(f"No messages found in the queue. Attempt {no_message_count} of 10.")
+            if no_message_count >= 10:
+                click.echo("No messages found after 10 consecutive attempts. Exiting successfully.")
+                break
+            continue  # Continue looping if no messages are found
+
+        # Reset the counter if messages are found.
+        no_message_count = 0
+
+        for message in messages:
+            dataset_uuid = message["Body"]
+            click.echo(f"Processing dataset UUID: {dataset_uuid}")
+            try:
+                process_dataset(dataset_uuid, process_cfg_url, overwrite)
+                # Delete the message from the queue after successful processing
+                sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"])
+                click.echo(f"Processed and deleted message for dataset UUID: {dataset_uuid}")
+            except Exception as e:
+                click.echo(f"Error processing dataset UUID {dataset_uuid}: {e}")
+
+    click.echo("Finished processing messages from SQS.")
 
 
 if __name__ == "__main__":
