@@ -25,8 +25,7 @@ from dea_fmc import fmc_io, helper
 # Import eodatasets3 and related modules for metadata generation
 from eodatasets3 import DatasetAssembler
 
-# For conversion to STAC – ensure this package is installed and available
-import eo3stac
+import eodatasets3.stac as eo3stac
 # For serialising ODC metadata (assuming you have an odc.index.serialise module)
 from odc.index import serialise
 
@@ -202,7 +201,7 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
     fmc_io.upload_object_to_s3(local_odc_metadata_path, local_odc_metadata_path)
 
     # Generate a thumbnail preview using eodatasets3 (replicate LFMC across RGB)
-    dataset_assembler.write_thumbnail(red="LFMC", green="LFMC", blue="LFMC")
+    dataset_assembler.write_thumbnail(red="fmc", green="fmc", blue="fmc")
     # Assuming the thumbnail is saved as defined in the accessories:
     fmc_io.upload_object_to_s3(thumbnail_filename, thumbnail_filename)
 
