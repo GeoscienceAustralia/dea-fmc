@@ -23,11 +23,8 @@ import dea_fmc.__version__
 from dea_fmc import fmc_io, helper
 
 # Import eodatasets3 and related modules for metadata generation
-from eodatasets3 import DatasetAssembler
-
+from eodatasets3.assemble import DatasetAssembler, serialise
 import eodatasets3.stac as eo3stac
-# For serialising ODC metadata (assuming you have an odc.index.serialise module)
-from odc.index import serialise
 
 # Configure logging
 logging.getLogger("botocore.credentials").setLevel(logging.WARNING)
