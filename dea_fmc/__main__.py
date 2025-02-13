@@ -141,6 +141,8 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
     dataset_assembler.properties["odc:file_format"] = "COG"
     dataset_assembler.properties["odc:producer"] = "DEA"
     dataset_assembler.properties["odc:product_family"] = "fmc"
+    dataset_assembler.maturity = "final"
+    dataset_assembler.collection_number = "3"
 
     # Restore warnings
     warnings.filterwarnings("default")
