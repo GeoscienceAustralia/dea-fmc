@@ -315,7 +315,7 @@ def submit_message(dataset_uuid, queue_url):
 @main.command()
 @click.option("--queue-url", "-q", type=str, required=True, help="AWS SQS Queue URL to read messages from.")
 @click.option("--process-cfg-url", "-p", type=str, required=True, help="URL to FMC process configuration file in YAML format.")
-@click.option("--overwrite/--no-overwrite", default=False, help="Rerun scenes that have already been processed.")
+@click.option("--overwrite/--no-overwrite", default=True, help="Rerun scenes that have already been processed.")
 def fmc_processing_with_sqs(queue_url, process_cfg_url, overwrite):
     """
     Continuously load messages from AWS SQS and process each dataset using FMC classification.
