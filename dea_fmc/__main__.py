@@ -88,7 +88,7 @@ def classify_fmc(data, model):
     return dataset_result
 
 
-def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, region_code, acquisition_date):
+def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, region_code, acquisition_date, thumbnail_local_path, s3_folder):
     """
     Generate extended metadata for FMC using eodatasets3,
     then convert to both ODC and STAC formats and upload them.
@@ -155,8 +155,6 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
         "fmc",
         local_tif,
         expand_valid_data=False,
-        # Optionally include grid information if available:
-        # grid=GridSpec(...),
         nodata=-999,
     )
 
@@ -164,7 +162,7 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
     dataset_assembler.extend_user_metadata("input-products", ["ga_s2am_ard_3", "ga_s2bm_ard_3", "ga_s2cm_ard_3"])
 
     # Set accessories for metadata processor and thumbnail
-    processor_filename = f"{product_name}_{region_code}_{acquisition_date}_processor.txt"
+    # processor_filename = f"{product_name}_{region_code}_{acquisition_date}_processor.txt"
     thumbnail_filename = f"{product_name}_{region_code}_{acquisition_date}_thumbnail.jpg"
     dataset_assembler._accessories["metadata:processor"] = processor_filename
     dataset_assembler._accessories["thumbnail"] = thumbnail_filename
@@ -188,7 +186,7 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
     with open(local_stac_metadata_path, "w") as json_file:
         json_file.write(stac_meta_str)
     logger.info("Upload STAC metadata to %s", local_stac_metadata_path)
-    fmc_io.upload_object_to_s3(local_stac_metadata_path, local_stac_metadata_path)
+    fmc_io.upload_object_to_s3(local_stac_metadata_path, f"{s3_folder}/{local_stac_metadata_path}")
 
     # Serialize ODC metadata to YAML and write to file
     meta_stream = io.StringIO()
@@ -196,13 +194,39 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
     odc_meta_str = meta_stream.getvalue()
     with open(local_odc_metadata_path, "w") as yml_file:
         yml_file.write(odc_meta_str)
-    logger.info("Upload ODC metadata to %s", local_odc_metadata_path)
-    fmc_io.upload_object_to_s3(local_odc_metadata_path, local_odc_metadata_path)
+    logger.info("Upload ODC metadata to %s", "")
+    fmc_io.upload_object_to_s3(local_odc_metadata_path, f"{s3_folder}/{local_odc_metadata_path}")
 
     # Generate a thumbnail preview using eodatasets3 (replicate LFMC across RGB)
     dataset_assembler.write_thumbnail(red="fmc", green="fmc", blue="fmc")
     # Assuming the thumbnail is saved as defined in the accessories:
-    fmc_io.upload_object_to_s3(thumbnail_filename, thumbnail_filename)
+    fmc_io.upload_object_to_s3(thumbnail_local_path, f"{s3_folder}/{thumbnail_filename}")
+
+
+def generate_thumbnail(masked_data):
+
+    import numpy as np
+    from matplotlib.colors import LinearSegmentedColormap
+    from PIL import Image
+
+    # Define the custom colormap
+    colours = [(0.87, 0, 0), (1, 1, 0.73), (0.165, 0.615, 0.957)]
+    cmap = LinearSegmentedColormap.from_list('fmc', colours, N=256)
+
+    # Apply the colormap to convert your data to an RGBA image
+    rgba_image = cmap(masked_data)
+
+    # Convert to 8-bit unsigned integers (0-255)
+    rgba_image = (rgba_image * 255).astype('uint8')
+
+    # Create a PIL image from the RGBA array and save it
+    img = Image.fromarray(rgba_image)
+
+    thumbnail_path = "thumbnail_image.jpg"
+
+    img.save(thumbnail_path)
+
+    return thumbnail_path
 
 
 def process_dataset(dataset_uuid, process_cfg_url, overwrite):
@@ -275,6 +299,10 @@ def process_dataset(dataset_uuid, process_cfg_url, overwrite):
     # Perform FMC classification
     fmc_data = classify_fmc(df, model)
     masked_data = fmc_data.where(~better_cloud_mask & ~water_mask)
+
+    # generate the thumbnail before no data control
+    thumbnail_local_path = generate_thumbnail(masked_data)
+
     masked_data = masked_data.where(masked_data >= 0, -999).astype("int16")
 
     # Save result as a Cloud Optimized GeoTIFF (COG)
@@ -286,7 +314,7 @@ def process_dataset(dataset_uuid, process_cfg_url, overwrite):
     logger.info(f"Uploaded result to: {s3_file_uri}")
 
     # Generate extended metadata (ODC and STAC) and a thumbnail
-    add_fmc_metadata_files(dataset, local_tif, product_name, product_version, region_code, acquisition_date)
+    add_fmc_metadata_files(dataset, local_tif, product_name, product_version, region_code, acquisition_date, thumbnail_local_path, s3_folder)
 
 
 @click.group()
