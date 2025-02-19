@@ -1,30 +1,32 @@
-# Import modules
+"""
+Cleaned version of the FMC processing code.
+"""
+
+import io
+import json
 import logging
 import os
 import sys
-import click
-import datacube
-import joblib
-import numpy as np
-import xarray as xr
-import boto3  # for interacting with AWS SQS
 import warnings
-import datetime
-import json
-import io
 from datetime import datetime as dt
 from pathlib import Path
 
+import boto3
+import click
+import datacube
+import eodatasets3.stac as eo3stac
+import joblib
+import numpy as np
+import xarray as xr
 from datacube.utils.cog import write_cog
 from dea_tools.classification import sklearn_flatten, sklearn_unflatten
+from eodatasets3.assemble import DatasetAssembler, serialise
+from matplotlib.colors import LinearSegmentedColormap
 from odc.algo import mask_cleanup
+from PIL import Image
 
 import dea_fmc.__version__
 from dea_fmc import fmc_io, helper
-
-# Import eodatasets3 and related modules for metadata generation
-from eodatasets3.assemble import DatasetAssembler, serialise
-import eodatasets3.stac as eo3stac
 
 # Configure logging
 logging.getLogger("botocore.credentials").setLevel(logging.WARNING)
@@ -32,24 +34,29 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def logging_setup():
-    """Set up logging for all modules except sqlalchemy and boto."""
+def logging_setup() -> None:
+    """
+    Set up logging for all modules except those starting with 'sqlalchemy' or 'boto'.
+    """
     loggers = [
         logging.getLogger(name)
         for name in logging.root.manager.loggerDict
         if not name.startswith("sqlalchemy") and not name.startswith("boto")
     ]
     stdout_hdlr = logging.StreamHandler(sys.stdout)
-    for logger_obj in loggers:
-        logger_obj.addHandler(stdout_hdlr)
-        logger_obj.propagate = False
+    for log in loggers:
+        log.addHandler(stdout_hdlr)
+        log.propagate = False
 
 
-def classify_fmc(data, model):
+def classify_fmc(data: xr.Dataset, model) -> xr.Dataset:
     """
     Perform FMC classification using a pre-trained model.
+
+    Calculates NDVI and NDII, reorders bands to match model expectations,
+    flattens the data for prediction, and returns a Dataset with a measurement 'LFMC'.
     """
-    # Calculate NDVI and NDII
+    # Calculate NDII and NDVI
     data["ndii"] = (data.nbart_nir_1 - data.nbart_swir_2) / (
         data.nbart_nir_1 + data.nbart_swir_2
     )
@@ -74,24 +81,33 @@ def classify_fmc(data, model):
     ]
     data_neworder = data[bands_order]
 
-    # Flatten the data for classification
+    # Flatten the data and replace any infinities with nodata (-999)
     data_flat = sklearn_flatten(data_neworder)
-    data_flat = np.where(np.isinf(data_flat), -999, data_flat)  # Replace inf
+    data_flat = np.where(np.isinf(data_flat), -999, data_flat)
 
     out_class = model.predict(data_flat)
     returned_result = sklearn_unflatten(out_class, data).transpose()
 
-    # Create the output dataset with one measurement: LFMC
+    # Create the output Dataset with one measurement: LFMC
     dataset_result = xr.Dataset(
         {"LFMC": returned_result}, coords=data.coords, attrs=data.attrs
     )
     return dataset_result
 
 
-def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, region_code, acquisition_date, thumbnail_local_path, s3_folder):
+def add_fmc_metadata_files(
+    dataset: xr.Dataset,
+    local_tif: str,
+    product_name: str,
+    product_version: str,
+    region_code: str,
+    acquisition_date: str,
+    thumbnail_local_path: str,
+    s3_folder: str,
+) -> None:
     """
-    Generate extended metadata for FMC using eodatasets3,
-    then convert to both ODC and STAC formats and upload them.
+    Generate extended metadata for FMC using eodatasets3, convert to both ODC and STAC formats,
+    and upload them (along with the thumbnail) to S3.
     """
     # Initialize the DatasetAssembler using DEA C3 naming conventions
     dataset_assembler = DatasetAssembler(
@@ -103,7 +119,7 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
     # Suppress inheritable property warnings
     warnings.simplefilter(action="ignore", category=UserWarning)
 
-    # Extract the source dataset document from the datacube dataset
+    # Extract the source dataset document from the datacube metadata
     source_datasetdoc = serialise.from_doc(dataset.metadata_doc, skip_validation=True)
     dataset_assembler.add_source_dataset(
         source_datasetdoc,
@@ -113,7 +129,7 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
         inherit_skip_properties=[],  # adjust as needed
     )
 
-    # Extract platform/instrument details from the source
+    # Extract platform and instrument details from the source document
     platforms = []
     instruments = []
     if "eo:platform" in source_datasetdoc.properties:
@@ -126,7 +142,6 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
     # Set geometry if available (here we use the dataset’s extent if present)
     if hasattr(dataset, "extent"):
         dataset_assembler.geometry = dataset.extent
-    # Otherwise, you might extract geometry from your processing (e.g. from a geobox)
 
     # Set the datetime and period properties (using acquisition_date for both start and end)
     dt_obj = dt.strptime(acquisition_date, "%Y-%m-%d")
@@ -152,18 +167,21 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
 
     # For FMC, assume one band ("LFMC") – note the measurement filename is the GeoTIFF we generated
     dataset_assembler.note_measurement(
-        "fmc",
-        local_tif,
-        expand_valid_data=False,
-        nodata=-999,
+        "fmc", local_tif, expand_valid_data=False, nodata=-999
     )
 
     # Extend user metadata (e.g. input product names)
-    dataset_assembler.extend_user_metadata("input-products", ["ga_s2am_ard_3", "ga_s2bm_ard_3", "ga_s2cm_ard_3"])
+    dataset_assembler.extend_user_metadata(
+        "input-products", ["ga_s2am_ard_3", "ga_s2bm_ard_3", "ga_s2cm_ard_3"]
+    )
 
     # Set accessories for metadata processor and thumbnail
-    # processor_filename = f"{product_name}_{region_code}_{acquisition_date}_processor.txt"
-    thumbnail_filename = f"{product_name}_{region_code}_{acquisition_date}_thumbnail.jpg"
+    processor_filename = (
+        f"{product_name}_{region_code}_{acquisition_date}_processor.txt"
+    )
+    thumbnail_filename = (
+        f"{product_name}_{region_code}_{acquisition_date}_thumbnail.jpg"
+    )
     dataset_assembler._accessories["metadata:processor"] = processor_filename
     dataset_assembler._accessories["thumbnail"] = thumbnail_filename
 
@@ -171,8 +189,12 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
     meta = dataset_assembler.to_dataset_doc()
 
     # Define local filenames for the STAC and ODC metadata
-    local_stac_metadata_path = f"{product_name}_{region_code}_{acquisition_date}.stac.json"
-    local_odc_metadata_path = f"{product_name}_{region_code}_{acquisition_date}.odc.yaml"
+    local_stac_metadata_path = (
+        f"{product_name}_{region_code}_{acquisition_date}.stac.json"
+    )
+    local_odc_metadata_path = (
+        f"{product_name}_{region_code}_{acquisition_date}.odc.yaml"
+    )
 
     # Convert to STAC metadata using eo3stac – adjust parameters as needed
     stac_meta = eo3stac.to_stac_item(
@@ -182,54 +204,54 @@ def add_fmc_metadata_files(dataset, local_tif, product_name, product_version, re
         odc_dataset_metadata_url=local_odc_metadata_path,
         explorer_base_url=f"https://explorer.dea.ga.gov.au/product/{product_name}",
     )
-    stac_meta_str = json.dumps(stac_meta, indent=4)
     with open(local_stac_metadata_path, "w") as json_file:
-        json_file.write(stac_meta_str)
+        json.dump(stac_meta, json_file, indent=4)
     logger.info("Upload STAC metadata to %s", local_stac_metadata_path)
-    fmc_io.upload_object_to_s3(local_stac_metadata_path, f"{s3_folder}/{local_stac_metadata_path}")
+    fmc_io.upload_object_to_s3(
+        local_stac_metadata_path, f"{s3_folder}/{local_stac_metadata_path}"
+    )
 
     # Serialize ODC metadata to YAML and write to file
     meta_stream = io.StringIO()
     serialise.to_stream(meta_stream, meta)
-    odc_meta_str = meta_stream.getvalue()
     with open(local_odc_metadata_path, "w") as yml_file:
-        yml_file.write(odc_meta_str)
-    logger.info("Upload ODC metadata to %s", "")
-    fmc_io.upload_object_to_s3(local_odc_metadata_path, f"{s3_folder}/{local_odc_metadata_path}")
+        yml_file.write(meta_stream.getvalue())
+    logger.info("Upload ODC metadata to %s", local_odc_metadata_path)
+    fmc_io.upload_object_to_s3(
+        local_odc_metadata_path, f"{s3_folder}/{local_odc_metadata_path}"
+    )
 
     # Generate a thumbnail preview using eodatasets3 (replicate LFMC across RGB)
     dataset_assembler.write_thumbnail(red="fmc", green="fmc", blue="fmc")
-    # Assuming the thumbnail is saved as defined in the accessories:
-    fmc_io.upload_object_to_s3(thumbnail_local_path, f"{s3_folder}/{thumbnail_filename}")
+    # Upload the thumbnail (assuming its path is thumbnail_local_path)
+    fmc_io.upload_object_to_s3(
+        thumbnail_local_path, f"{s3_folder}/{thumbnail_filename}"
+    )
 
 
-def generate_thumbnail(masked_data):
+def generate_thumbnail(masked_data: np.ndarray) -> str:
+    """
+    Generate a thumbnail image from masked data using a custom colormap.
 
-    import numpy as np
-    from matplotlib.colors import LinearSegmentedColormap
-    from PIL import Image
-
+    Returns:
+        The local file path to the generated thumbnail image.
+    """
     # Define the custom colormap
     colours = [(0.87, 0, 0), (1, 1, 0.73), (0.165, 0.615, 0.957)]
-    cmap = LinearSegmentedColormap.from_list('fmc', colours, N=256)
+    cmap = LinearSegmentedColormap.from_list("fmc", colours, N=256)
 
-    # Apply the colormap to convert your data to an RGBA image
+    # Apply the colormap to convert the data to an RGBA image
     rgba_image = cmap(masked_data)
-
-    # Convert to 8-bit unsigned integers (0-255)
-    rgba_image = (rgba_image * 255).astype('uint8')
+    rgba_image = (rgba_image * 255).astype("uint8")
 
     # Create a PIL image from the RGBA array and save it
     img = Image.fromarray(rgba_image)
-
     thumbnail_path = "thumbnail_image.jpg"
-
     img.save(thumbnail_path)
-
     return thumbnail_path
 
 
-def process_dataset(dataset_uuid, process_cfg_url, overwrite):
+def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) -> None:
     """
     Process FMC for a given dataset UUID and configuration.
     """
@@ -257,7 +279,7 @@ def process_dataset(dataset_uuid, process_cfg_url, overwrite):
     product_name = process_cfg["product"]["name"]
     product_version = str(process_cfg["product"]["version"]).replace(".", "-")
 
-    # Download the pre-trained model
+    # Download and load the pre-trained model
     model_path = "RF_AllBands_noLC_DEA_labeless.joblib"
     helper.download_file_from_s3_public(model_url, model_path)
     model = joblib.load(model_path)
@@ -269,7 +291,6 @@ def process_dataset(dataset_uuid, process_cfg_url, overwrite):
     region_code = dataset.metadata.fields["region_code"]
     acquisition_date = dataset.metadata.fields["time"][0].date().strftime("%Y-%m-%d")
     local_tif = f"{product_name}_{region_code}_{acquisition_date}_fmc.tif"
-
     s3_folder = (
         f"{output_folder}/{product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
         + acquisition_date.replace("-", "/")
@@ -278,7 +299,10 @@ def process_dataset(dataset_uuid, process_cfg_url, overwrite):
 
     # Skip processing if output exists and overwrite is False
     if not overwrite and helper.check_s3_file_exists(s3_file_uri):
-        logger.info(f"S3 object {s3_file_uri} already exists and overwrite is False. Skipping processing.")
+        logger.info(
+            "S3 object %s already exists and overwrite is False. Skipping processing.",
+            s3_file_uri,
+        )
         return
 
     # Load the dataset with specified measurements
@@ -290,52 +314,91 @@ def process_dataset(dataset_uuid, process_cfg_url, overwrite):
         output_crs="EPSG:3577",
     )
 
-    # Create masks and cleanup
+    # Create masks: cloud and water masks based on fmask and contiguity
     cloud_mask = (df.oa_fmask == 2) | (df.oa_fmask == 3)
     water_mask = (df.oa_fmask == 5) | (df.oa_fmask == 0) | (df.oa_nbart_contiguity == 0)
-    better_cloud_mask = mask_cleanup(mask=cloud_mask, mask_filters=[("opening", 1), ("dilation", 3)])
+    better_cloud_mask = mask_cleanup(
+        mask=cloud_mask, mask_filters=[("opening", 1), ("dilation", 3)]
+    )
     df = df.drop_vars(["oa_fmask", "oa_nbart_contiguity"])
 
     # Perform FMC classification
     fmc_data = classify_fmc(df, model)
     masked_data = fmc_data.where(~better_cloud_mask & ~water_mask)
 
-    # generate the thumbnail before no data control
+    # Generate thumbnail before applying no-data control
     thumbnail_local_path = generate_thumbnail(masked_data)
 
+    # Set nodata values (-999) for pixels below zero and cast to int16
     masked_data = masked_data.where(masked_data >= 0, -999).astype("int16")
 
     # Save result as a Cloud Optimized GeoTIFF (COG)
     write_cog(masked_data.LFMC, fname=local_tif, overwrite=True, nodata=-999)
-    logger.info(f"Result saved as: {local_tif}")
+    logger.info("Result saved as: %s", local_tif)
 
     helper.get_and_set_aws_credentials()
     fmc_io.upload_object_to_s3(local_tif, s3_file_uri)
-    logger.info(f"Uploaded result to: {s3_file_uri}")
+    logger.info("Uploaded result to: %s", s3_file_uri)
 
-    # Generate extended metadata (ODC and STAC) and a thumbnail
-    add_fmc_metadata_files(dataset, local_tif, product_name, product_version, region_code, acquisition_date, thumbnail_local_path, s3_folder)
+    # Generate extended metadata (ODC and STAC) and upload thumbnail
+    add_fmc_metadata_files(
+        dataset,
+        local_tif,
+        product_name,
+        product_version,
+        region_code,
+        acquisition_date,
+        thumbnail_local_path,
+        s3_folder,
+    )
+
+
+# -------------------- Click CLI Commands -------------------- #
 
 
 @click.group()
 @click.version_option(version=dea_fmc.__version__)
-def main():
+def main() -> None:
     """Run dea-fmc."""
 
 
 @main.command(no_args_is_help=True)
-@click.option("--dataset-uuid", "-d", type=str, required=True, help="Dataset UUID to process.")
-@click.option("--process-cfg-url", "-p", type=str, required=True, help="URL to FMC process configuration file in YAML format.")
-@click.option("--overwrite/--no-overwrite", default=False, help="Rerun scenes that have already been processed.")
-def fmc_processing(dataset_uuid, process_cfg_url, overwrite):
+@click.option(
+    "--dataset-uuid", "-d", type=str, required=True, help="Dataset UUID to process."
+)
+@click.option(
+    "--process-cfg-url",
+    "-p",
+    type=str,
+    required=True,
+    help="URL to FMC process configuration file in YAML format.",
+)
+@click.option(
+    "--overwrite/--no-overwrite",
+    default=False,
+    help="Rerun scenes that have already been processed.",
+)
+def fmc_processing(dataset_uuid: str, process_cfg_url: str, overwrite: bool) -> None:
     """Process FMC for a given dataset UUID and configuration."""
     process_dataset(dataset_uuid, process_cfg_url, overwrite)
 
 
 @main.command()
-@click.option("--dataset-uuid", "-d", type=str, required=True, help="Dataset UUID to submit to AWS SQS.")
-@click.option("--queue-url", "-q", type=str, required=True, help="AWS SQS Queue URL to submit the message to.")
-def submit_message(dataset_uuid, queue_url):
+@click.option(
+    "--dataset-uuid",
+    "-d",
+    type=str,
+    required=True,
+    help="Dataset UUID to submit to AWS SQS.",
+)
+@click.option(
+    "--queue-url",
+    "-q",
+    type=str,
+    required=True,
+    help="AWS SQS Queue URL to submit the message to.",
+)
+def submit_message(dataset_uuid: str, queue_url: str) -> None:
     """Submit a dataset UUID as a message to AWS SQS."""
     sqs = boto3.client("sqs")
     response = sqs.send_message(QueueUrl=queue_url, MessageBody=dataset_uuid)
@@ -343,10 +406,28 @@ def submit_message(dataset_uuid, queue_url):
 
 
 @main.command()
-@click.option("--queue-url", "-q", type=str, required=True, help="AWS SQS Queue URL to read messages from.")
-@click.option("--process-cfg-url", "-p", type=str, required=True, help="URL to FMC process configuration file in YAML format.")
-@click.option("--overwrite/--no-overwrite", default=True, help="Rerun scenes that have already been processed.")
-def fmc_processing_with_sqs(queue_url, process_cfg_url, overwrite):
+@click.option(
+    "--queue-url",
+    "-q",
+    type=str,
+    required=True,
+    help="AWS SQS Queue URL to read messages from.",
+)
+@click.option(
+    "--process-cfg-url",
+    "-p",
+    type=str,
+    required=True,
+    help="URL to FMC process configuration file in YAML format.",
+)
+@click.option(
+    "--overwrite/--no-overwrite",
+    default=True,
+    help="Rerun scenes that have already been processed.",
+)
+def fmc_processing_with_sqs(
+    queue_url: str, process_cfg_url: str, overwrite: bool
+) -> None:
     """
     Continuously load messages from AWS SQS and process each dataset using FMC classification.
     Exits after 10 consecutive empty polls.
@@ -355,11 +436,15 @@ def fmc_processing_with_sqs(queue_url, process_cfg_url, overwrite):
     no_message_count = 0
 
     while True:
-        response = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=10)
+        response = sqs.receive_message(
+            QueueUrl=queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=10
+        )
         messages = response.get("Messages", [])
         if not messages:
             no_message_count += 1
-            click.echo(f"No messages found in the queue. Attempt {no_message_count} of 10.")
+            click.echo(
+                f"No messages found in the queue. Attempt {no_message_count} of 10."
+            )
             if no_message_count >= 10:
                 click.echo("No messages after 10 attempts. Exiting.")
                 break
@@ -371,8 +456,12 @@ def fmc_processing_with_sqs(queue_url, process_cfg_url, overwrite):
             click.echo(f"Processing dataset UUID: {dataset_uuid}")
             try:
                 process_dataset(dataset_uuid, process_cfg_url, overwrite)
-                sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"])
-                click.echo(f"Processed and deleted message for dataset UUID: {dataset_uuid}")
+                sqs.delete_message(
+                    QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"]
+                )
+                click.echo(
+                    f"Processed and deleted message for dataset UUID: {dataset_uuid}"
+                )
             except Exception as e:
                 click.echo(f"Error processing dataset UUID {dataset_uuid}: {e}")
 
