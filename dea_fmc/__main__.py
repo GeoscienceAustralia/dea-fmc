@@ -169,7 +169,7 @@ def add_fmc_metadata_files(
     warnings.filterwarnings("default")
 
     # Record processing time
-    dataset_assembler.processed = dt.datetime.utcnow()
+    dataset_assembler.processed = dt.utcnow()
 
     # use geometry from input dataset
     dataset_assembler.geometry = dataset.geobox.extent.geom
