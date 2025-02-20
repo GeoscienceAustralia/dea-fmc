@@ -24,6 +24,7 @@ from dea_tools.classification import sklearn_flatten, sklearn_unflatten
 from eodatasets3.assemble import DatasetAssembler, serialise
 from matplotlib.colors import LinearSegmentedColormap
 from odc.algo import mask_cleanup
+from eodatasets3.images import GridSpec
 
 import dea_fmc.__version__
 from dea_fmc import fmc_io, helper
@@ -107,8 +108,12 @@ def add_fmc_metadata_files(
 ) -> None:
     """
     Generate extended metadata for FMC using eodatasets3, convert to both ODC and STAC formats,
-    and upload them (along with the thumbnail) to S3.
+    and upload them (along with the thumbnail) to S3. This implementation follows the same workflow
+    as the Burn Cube add_metadata_files method.
     """
+    # Create a base title for naming outputs
+    title = f"{product_name}_{region_code}_{acquisition_date}"
+    
     # Initialize the DatasetAssembler using DEA C3 naming conventions
     dataset_assembler = DatasetAssembler(
         naming_conventions="dea_c3",
@@ -116,17 +121,17 @@ def add_fmc_metadata_files(
         allow_absolute_paths=True,
     )
 
-    # Suppress inheritable property warnings
+    # Suppress inheritable property warnings (as in Burn Cube)
     warnings.simplefilter(action="ignore", category=UserWarning)
 
-    # Extract the source dataset document from the datacube metadata
+    # Extract the source dataset document from the datacube metadata and add it
     source_datasetdoc = serialise.from_doc(dataset.metadata_doc, skip_validation=True)
     dataset_assembler.add_source_dataset(
         source_datasetdoc,
-        classifier="fmc",  # use a classifier specific to FMC
+        classifier="fmc",  # FMC-specific classifier
         auto_inherit_properties=True,
-        inherit_geometry=False,
-        inherit_skip_properties=[],  # adjust as needed
+        inherit_geometry=True,
+        inherit_skip_properties=[],  # Adjust if necessary
     )
 
     # Extract platform and instrument details from the source document
@@ -139,12 +144,12 @@ def add_fmc_metadata_files(
     dataset_assembler.platform = ",".join(sorted(set(platforms)))
     dataset_assembler.instrument = "_".join(sorted(set(instruments)))
 
-    # Set geometry if available (here we use the dataset’s extent if present)
+    # Set geometry if available (mimicking Burn Cube logic)
     if hasattr(dataset, "extent"):
         dataset_assembler.geometry = dataset.extent
 
-    # Set the datetime and period properties (using acquisition_date for both start and end)
-    dt_obj = dt.strptime(acquisition_date, "%Y-%m-%d")
+    # Parse the acquisition date and set datetime properties
+    dt_obj = dt.datetime.strptime(acquisition_date, "%Y-%m-%d")
     dataset_assembler.datetime = dt_obj
     dataset_assembler.properties["dtr:start_datetime"] = dt_obj.isoformat()
     dataset_assembler.properties["dtr:end_datetime"] = dt_obj.isoformat()
@@ -153,21 +158,34 @@ def add_fmc_metadata_files(
     dataset_assembler.product_name = product_name
     dataset_assembler.dataset_version = product_version
     dataset_assembler.region_code = region_code
-    dataset_assembler.properties["odc:file_format"] = "COG"
-    dataset_assembler.properties["odc:producer"] = "DEA"
+    dataset_assembler.properties["odc:file_format"] = "GeoTIFF"
+    dataset_assembler.properties["odc:producer"] = "ga.gov.au"
     dataset_assembler.properties["odc:product_family"] = "fmc"
     dataset_assembler.maturity = "final"
-    dataset_assembler.collection_number = "3"
+    dataset_assembler.collection_number = 3
 
-    # Restore warnings
+    # Restore warning settings
     warnings.filterwarnings("default")
 
-    # Record the processing time
-    dataset_assembler.processed = dt.utcnow()
+    # Record processing time
+    dataset_assembler.processed = dt.datetime.utcnow()
 
-    # For FMC, assume one band ("LFMC") – note the measurement filename is the GeoTIFF we generated
+    # use geometry from input dataset
+    dataset_assembler.geometry = dataset.geobox.extent.geom
+
+    # Add measurement note (here we assume one band named "fmc")
+    # We use the local tif extension to keep consistency with the Burn Cube approach
+    tif_ext = os.path.splitext(local_tif)[1]
     dataset_assembler.note_measurement(
-        "fmc", local_tif, expand_valid_data=False, nodata=-999
+        "fmc",
+        f"{title}_fmc{tif_ext}",
+        expand_valid_data=False,
+        grid=GridSpec(
+            shape=dataset.geobox.shape,
+            transform=dataset.geobox.transform,
+            crs=CRS.from_epsg(dataset.geobox.crs.to_epsg()),
+        ),
+        nodata=-999,
     )
 
     # Extend user metadata (e.g. input product names)
@@ -176,27 +194,19 @@ def add_fmc_metadata_files(
     )
 
     # Set accessories for metadata processor and thumbnail
-    processor_filename = (
-        f"{product_name}_{region_code}_{acquisition_date}_processor.txt"
-    )
-    thumbnail_filename = (
-        f"{product_name}_{region_code}_{acquisition_date}_thumbnail.jpg"
-    )
+    processor_filename = f"{title}_processor.txt"
+    thumbnail_filename = f"{title}_thumbnail.jpg"
     dataset_assembler._accessories["metadata:processor"] = processor_filename
     dataset_assembler._accessories["thumbnail"] = thumbnail_filename
 
     # Convert the assembled metadata to an ODC dataset document
     meta = dataset_assembler.to_dataset_doc()
 
-    # Define local filenames for the STAC and ODC metadata
-    local_stac_metadata_path = (
-        f"{product_name}_{region_code}_{acquisition_date}.stac.json"
-    )
-    local_odc_metadata_path = (
-        f"{product_name}_{region_code}_{acquisition_date}.odc.yaml"
-    )
+    # Define local filenames for the STAC and ODC metadata files
+    local_stac_metadata_path = f"{title}.stac.json"
+    local_odc_metadata_path = f"{title}.odc.yaml"
 
-    # Convert to STAC metadata using eo3stac – adjust parameters as needed
+    # Convert to STAC metadata using eo3stac (similar to Burn Cube)
     stac_meta = eo3stac.to_stac_item(
         dataset=meta,
         stac_item_destination_url=local_stac_metadata_path,
@@ -204,12 +214,11 @@ def add_fmc_metadata_files(
         odc_dataset_metadata_url=local_odc_metadata_path,
         explorer_base_url=f"https://explorer.dea.ga.gov.au/product/{product_name}",
     )
+    # Write and upload STAC metadata file
     with open(local_stac_metadata_path, "w") as json_file:
         json.dump(stac_meta, json_file, indent=4)
     logger.info("Upload STAC metadata to %s", local_stac_metadata_path)
-    fmc_io.upload_object_to_s3(
-        local_stac_metadata_path, f"{s3_folder}/{local_stac_metadata_path}"
-    )
+    fmc_io.upload_object_to_s3(local_stac_metadata_path, f"{s3_folder}/{local_stac_metadata_path}")
 
     # Serialize ODC metadata to YAML and write to file
     meta_stream = io.StringIO()
@@ -217,16 +226,12 @@ def add_fmc_metadata_files(
     with open(local_odc_metadata_path, "w") as yml_file:
         yml_file.write(meta_stream.getvalue())
     logger.info("Upload ODC metadata to %s", local_odc_metadata_path)
-    fmc_io.upload_object_to_s3(
-        local_odc_metadata_path, f"{s3_folder}/{local_odc_metadata_path}"
-    )
+    fmc_io.upload_object_to_s3(local_odc_metadata_path, f"{s3_folder}/{local_odc_metadata_path}")
 
-    # Generate a thumbnail preview using eodatasets3 (replicate LFMC across RGB)
+    # Generate a thumbnail preview: here we mimic the Burn Cube style by replicating the 'fmc' band
     dataset_assembler.write_thumbnail(red="fmc", green="fmc", blue="fmc")
-    # Upload the thumbnail (assuming its path is thumbnail_local_path)
-    fmc_io.upload_object_to_s3(
-        thumbnail_local_path, f"{s3_folder}/{thumbnail_filename}"
-    )
+    # Upload the generated thumbnail (assumed to be at thumbnail_local_path)
+    fmc_io.upload_object_to_s3(thumbnail_local_path, f"{s3_folder}/{thumbnail_filename}")
 
 
 def generate_thumbnail(masked_data: xr.Dataset) -> str:
