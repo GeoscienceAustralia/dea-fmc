@@ -229,7 +229,7 @@ def add_fmc_metadata_files(
     )
 
 
-def generate_thumbnail(masked_data: xr.dataset) -> str:
+def generate_thumbnail(masked_data: xr.Dataset) -> str:
     """
     Generate a thumbnail image from masked data using a custom colormap.
 
