@@ -105,7 +105,7 @@ def add_fmc_metadata_files(
     product_version: str,
     region_code: str,
     acquisition_date: str,
-    thumbnail_local_path: str,
+    local_thumbnail_path: str,
     s3_folder: str,
 ) -> None:
     """
@@ -215,9 +215,11 @@ def add_fmc_metadata_files(
     # Write and upload STAC metadata file
     with open(local_stac_metadata_path, "w") as json_file:
         json.dump(stac_meta, json_file, indent=4)
-    logger.info("Upload STAC metadata to %s", local_stac_metadata_path)
+    
+    s3_stac_metadata_path = f"{s3_folder}/{local_stac_metadata_path}"
+    logger.info("Upload STAC metadata to %s", s3_stac_metadata_path)
     fmc_io.upload_object_to_s3(
-        local_stac_metadata_path, f"{s3_folder}/{local_stac_metadata_path}"
+        local_stac_metadata_path, s3_stac_metadata_path
     )
 
     # Serialize ODC metadata to YAML and write to file
@@ -225,15 +227,19 @@ def add_fmc_metadata_files(
     serialise.to_stream(meta_stream, meta)
     with open(local_odc_metadata_path, "w") as yml_file:
         yml_file.write(meta_stream.getvalue())
-    logger.info("Upload ODC metadata to %s", local_odc_metadata_path)
+
+    s3_odc_metadata_path = f"{s3_folder}/{local_odc_metadata_path}"
+    logger.info("Upload ODC metadata to %s", s3_odc_metadata_path)
     fmc_io.upload_object_to_s3(
-        local_odc_metadata_path, f"{s3_folder}/{local_odc_metadata_path}"
+        local_odc_metadata_path, s3_odc_metadata_path
     )
 
     # we already has the thumbail generate before
-    # Upload the generated thumbnail (assumed to be at thumbnail_local_path)
+    # Upload the generated thumbnail (assumed to be at local_thumbnail_path)
+    s3_thumbnail_path = f"{s3_folder}/{local_thumbnail_path}"
+    logger.info("Upload Thumbnail file to %s", s3_thumbnail_path)
     fmc_io.upload_object_to_s3(
-        thumbnail_local_path, f"{s3_folder}/{thumbnail_filename}"
+        local_thumbnail_path, s3_thumbnail_path
     )
 
 
@@ -273,11 +279,11 @@ def generate_thumbnail(masked_data: xr.Dataset) -> str:
 
     # Save the figure, ensuring the output matches the input resolution
     plt.savefig(
-        thumbnail_path, dpi=dpi, bbox_inches="tight", pad_inches=0, format="jpg"
+        local_thumbnail_path, dpi=dpi, bbox_inches="tight", pad_inches=0, format="jpg"
     )
     plt.close()
 
-    return thumbnail_path
+    return local_thumbnail_path
 
 
 def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) -> None:
@@ -378,7 +384,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
         product_version,
         region_code,
         acquisition_date,
-        thumbnail_local_path,
+        local_thumbnail_path,
         s3_folder,
     )
 
