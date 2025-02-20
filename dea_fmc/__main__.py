@@ -396,7 +396,7 @@ def main() -> None:
 )
 @click.option(
     "--overwrite/--no-overwrite",
-    default=False,
+    default=True,
     help="Rerun scenes that have already been processed.",
 )
 def fmc_processing(dataset_uuid: str, process_cfg_url: str, overwrite: bool) -> None:
