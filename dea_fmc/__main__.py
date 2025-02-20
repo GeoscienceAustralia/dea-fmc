@@ -98,7 +98,8 @@ def classify_fmc(data: xr.Dataset, model) -> xr.Dataset:
 
 
 def add_fmc_metadata_files(
-    dataset: xr.Dataset,
+    ard_dataset: xr.Dataset,
+    dataset: datacube.model.Dataset,
     local_tif: str,
     product_name: str,
     product_version: str,
@@ -129,7 +130,7 @@ def add_fmc_metadata_files(
     source_datasetdoc = serialise.from_doc(dataset.metadata_doc, skip_validation=True)
     dataset_assembler.add_source_dataset(
         source_datasetdoc,
-        classifier="fmc",  # FMC-specific classifier
+        classifier="ard",  # FMC-specific classifier
         auto_inherit_properties=True,
         inherit_geometry=True,
         inherit_skip_properties=[],  # Adjust if necessary
@@ -145,9 +146,8 @@ def add_fmc_metadata_files(
     dataset_assembler.platform = ",".join(sorted(set(platforms)))
     dataset_assembler.instrument = "_".join(sorted(set(instruments)))
 
-    # Set geometry if available (mimicking Burn Cube logic)
-    if hasattr(dataset, "extent"):
-        dataset_assembler.geometry = dataset.extent
+    # use geometry from input dataset
+    dataset_assembler.geometry = ard_dataset.geobox.extent.geom
 
     # Parse the acquisition date and set datetime properties
     dt_obj = dt.strptime(acquisition_date, "%Y-%m-%d")
@@ -170,10 +170,7 @@ def add_fmc_metadata_files(
 
     # Record processing time
     dataset_assembler.processed = dt.utcnow()
-
-    # use geometry from input dataset
-    dataset_assembler.geometry = dataset.geobox.extent.geom
-
+    
     # Add measurement note (here we assume one band named "fmc")
     # We use the local tif extension to keep consistency with the Burn Cube approach
     tif_ext = os.path.splitext(local_tif)[1]
@@ -182,9 +179,9 @@ def add_fmc_metadata_files(
         f"{title}_fmc{tif_ext}",
         expand_valid_data=False,
         grid=GridSpec(
-            shape=dataset.geobox.shape,
-            transform=dataset.geobox.transform,
-            crs=CRS.from_epsg(dataset.geobox.crs.to_epsg()),
+            shape=ard_dataset.geobox.shape,
+            transform=ard_dataset.geobox.transform,
+            crs=CRS.from_epsg(ard_dataset.geobox.crs.to_epsg()),
         ),
         nodata=-999,
     )
@@ -195,9 +192,9 @@ def add_fmc_metadata_files(
     )
 
     # Set accessories for metadata processor and thumbnail
-    processor_filename = f"{title}_processor.txt"
+    # processor_filename = f"{title}_processor.txt"
     thumbnail_filename = f"{title}_thumbnail.jpg"
-    dataset_assembler._accessories["metadata:processor"] = processor_filename
+    # dataset_assembler._accessories["metadata:processor"] = processor_filename
     dataset_assembler._accessories["thumbnail"] = thumbnail_filename
 
     # Convert the assembled metadata to an ODC dataset document
@@ -233,8 +230,7 @@ def add_fmc_metadata_files(
         local_odc_metadata_path, f"{s3_folder}/{local_odc_metadata_path}"
     )
 
-    # Generate a thumbnail preview: here we mimic the Burn Cube style by replicating the 'fmc' band
-    dataset_assembler.write_thumbnail(red="fmc", green="fmc", blue="fmc")
+    # we already has the thumbail generate before
     # Upload the generated thumbnail (assumed to be at thumbnail_local_path)
     fmc_io.upload_object_to_s3(
         thumbnail_local_path, f"{s3_folder}/{thumbnail_filename}"
@@ -375,6 +371,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
 
     # Generate extended metadata (ODC and STAC) and upload thumbnail
     add_fmc_metadata_files(
+        df,
         dataset,
         local_tif,
         product_name,
