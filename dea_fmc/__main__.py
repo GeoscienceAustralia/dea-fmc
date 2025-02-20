@@ -22,9 +22,10 @@ import xarray as xr
 from datacube.utils.cog import write_cog
 from dea_tools.classification import sklearn_flatten, sklearn_unflatten
 from eodatasets3.assemble import DatasetAssembler, serialise
+from eodatasets3.images import GridSpec
 from matplotlib.colors import LinearSegmentedColormap
 from odc.algo import mask_cleanup
-from eodatasets3.images import GridSpec
+from rasterio.crs import CRS
 
 import dea_fmc.__version__
 from dea_fmc import fmc_io, helper
@@ -113,7 +114,7 @@ def add_fmc_metadata_files(
     """
     # Create a base title for naming outputs
     title = f"{product_name}_{region_code}_{acquisition_date}"
-    
+
     # Initialize the DatasetAssembler using DEA C3 naming conventions
     dataset_assembler = DatasetAssembler(
         naming_conventions="dea_c3",
@@ -218,7 +219,9 @@ def add_fmc_metadata_files(
     with open(local_stac_metadata_path, "w") as json_file:
         json.dump(stac_meta, json_file, indent=4)
     logger.info("Upload STAC metadata to %s", local_stac_metadata_path)
-    fmc_io.upload_object_to_s3(local_stac_metadata_path, f"{s3_folder}/{local_stac_metadata_path}")
+    fmc_io.upload_object_to_s3(
+        local_stac_metadata_path, f"{s3_folder}/{local_stac_metadata_path}"
+    )
 
     # Serialize ODC metadata to YAML and write to file
     meta_stream = io.StringIO()
@@ -226,12 +229,16 @@ def add_fmc_metadata_files(
     with open(local_odc_metadata_path, "w") as yml_file:
         yml_file.write(meta_stream.getvalue())
     logger.info("Upload ODC metadata to %s", local_odc_metadata_path)
-    fmc_io.upload_object_to_s3(local_odc_metadata_path, f"{s3_folder}/{local_odc_metadata_path}")
+    fmc_io.upload_object_to_s3(
+        local_odc_metadata_path, f"{s3_folder}/{local_odc_metadata_path}"
+    )
 
     # Generate a thumbnail preview: here we mimic the Burn Cube style by replicating the 'fmc' band
     dataset_assembler.write_thumbnail(red="fmc", green="fmc", blue="fmc")
     # Upload the generated thumbnail (assumed to be at thumbnail_local_path)
-    fmc_io.upload_object_to_s3(thumbnail_local_path, f"{s3_folder}/{thumbnail_filename}")
+    fmc_io.upload_object_to_s3(
+        thumbnail_local_path, f"{s3_folder}/{thumbnail_filename}"
+    )
 
 
 def generate_thumbnail(masked_data: xr.Dataset) -> str:
