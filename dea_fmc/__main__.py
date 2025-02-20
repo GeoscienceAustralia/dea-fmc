@@ -16,6 +16,7 @@ import click
 import datacube
 import eodatasets3.stac as eo3stac
 import joblib
+import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 from datacube.utils.cog import write_cog
@@ -23,7 +24,6 @@ from dea_tools.classification import sklearn_flatten, sklearn_unflatten
 from eodatasets3.assemble import DatasetAssembler, serialise
 from matplotlib.colors import LinearSegmentedColormap
 from odc.algo import mask_cleanup
-from PIL import Image
 
 import dea_fmc.__version__
 from dea_fmc import fmc_io, helper
@@ -229,25 +229,46 @@ def add_fmc_metadata_files(
     )
 
 
-def generate_thumbnail(masked_data: np.ndarray) -> str:
+def generate_thumbnail(masked_data: xr.dataset) -> str:
     """
     Generate a thumbnail image from masked data using a custom colormap.
 
     Returns:
         The local file path to the generated thumbnail image.
     """
+
+    # Assume FMC_data, better_cloud_mask, and water_mask are already defined
     # Define the custom colormap
     colours = [(0.87, 0, 0), (1, 1, 0.73), (0.165, 0.615, 0.957)]
     cmap = LinearSegmentedColormap.from_list("fmc", colours, N=256)
 
-    # Apply the colormap to convert the data to an RGBA image
-    rgba_image = cmap(masked_data)
-    rgba_image = (rgba_image * 255).astype("uint8")
+    # If your data has a singleton 'time' dimension, squeeze it
+    data_to_plot = masked_data.LFMC.squeeze()
 
-    # Create a PIL image from the RGBA array and save it
-    img = Image.fromarray(rgba_image)
+    # Get the dimensions of the data
+    height, width = data_to_plot.shape
+
+    # Choose a DPI (dots per inch)
+    dpi = 100
+
+    # Calculate figure size in inches so that the saved image has the correct resolution
+    _, ax = plt.subplots(figsize=(width / dpi, height / dpi), dpi=dpi)
+
+    # Display the image without interpolation to preserve pixel resolution
+    ax.imshow(data_to_plot, cmap=cmap, interpolation="none")
+
+    # Remove axes and extra whitespace
+    ax.axis("off")
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
     thumbnail_path = "thumbnail_image.jpg"
-    img.save(thumbnail_path)
+
+    # Save the figure, ensuring the output matches the input resolution
+    plt.savefig(
+        thumbnail_path, dpi=dpi, bbox_inches="tight", pad_inches=0, format="jpg"
+    )
+    plt.close()
+
     return thumbnail_path
 
 
