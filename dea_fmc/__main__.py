@@ -150,7 +150,7 @@ def add_fmc_metadata_files(
         dataset_assembler.geometry = dataset.extent
 
     # Parse the acquisition date and set datetime properties
-    dt_obj = dt.datetime.strptime(acquisition_date, "%Y-%m-%d")
+    dt_obj = dt.strptime(acquisition_date, "%Y-%m-%d")
     dataset_assembler.datetime = dt_obj
     dataset_assembler.properties["dtr:start_datetime"] = dt_obj.isoformat()
     dataset_assembler.properties["dtr:end_datetime"] = dt_obj.isoformat()
