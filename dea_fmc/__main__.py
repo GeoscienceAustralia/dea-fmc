@@ -236,7 +236,7 @@ def add_fmc_metadata_files(
 
     # we already has the thumbail generate before
     # Upload the generated thumbnail (assumed to be at local_thumbnail_path)
-    s3_thumbnail_path = f"{s3_folder}/{local_thumbnail_path}"
+    s3_thumbnail_path = f"{s3_folder}/{thumbnail_filename}"
     logger.info("Upload Thumbnail file to %s", s3_thumbnail_path)
     fmc_io.upload_object_to_s3(
         local_thumbnail_path, s3_thumbnail_path
