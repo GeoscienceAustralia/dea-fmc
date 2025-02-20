@@ -275,7 +275,7 @@ def generate_thumbnail(masked_data: xr.Dataset) -> str:
     ax.axis("off")
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
-    thumbnail_path = "thumbnail_image.jpg"
+    local_thumbnail_path = "thumbnail_image.jpg"
 
     # Save the figure, ensuring the output matches the input resolution
     plt.savefig(
@@ -362,7 +362,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     masked_data = fmc_data.where(~better_cloud_mask & ~water_mask)
 
     # Generate thumbnail before applying no-data control
-    thumbnail_local_path = generate_thumbnail(masked_data)
+    local_thumbnail_path = generate_thumbnail(masked_data)
 
     # Set nodata values (-999) for pixels below zero and cast to int16
     masked_data = masked_data.where(masked_data >= 0, -999).astype("int16")
