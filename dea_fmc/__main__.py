@@ -204,11 +204,14 @@ def add_fmc_metadata_files(
     local_stac_metadata_path = f"{title}.stac.json"
     local_odc_metadata_path = f"{title}.odc.yaml"
 
+    s3_stac_metadata_path = f"{s3_folder}/{local_stac_metadata_path}"
+    s3_odc_metadata_path = f"{s3_folder}/{local_odc_metadata_path}"
+
     # Convert to STAC metadata using eo3stac (similar to Burn Cube)
     stac_meta = eo3stac.to_stac_item(
         dataset=meta,
         stac_item_destination_url=local_stac_metadata_path,
-        dataset_location=str(Path(local_tif).parent),
+        dataset_location=s3_folder,
         odc_dataset_metadata_url=local_odc_metadata_path,
         explorer_base_url=f"https://explorer.dea.ga.gov.au/product/{product_name}",
     )
@@ -216,7 +219,6 @@ def add_fmc_metadata_files(
     with open(local_stac_metadata_path, "w") as json_file:
         json.dump(stac_meta, json_file, indent=4)
     
-    s3_stac_metadata_path = f"{s3_folder}/{local_stac_metadata_path}"
     logger.info("Upload STAC metadata to %s", s3_stac_metadata_path)
     fmc_io.upload_object_to_s3(
         local_stac_metadata_path, s3_stac_metadata_path
@@ -228,7 +230,6 @@ def add_fmc_metadata_files(
     with open(local_odc_metadata_path, "w") as yml_file:
         yml_file.write(meta_stream.getvalue())
 
-    s3_odc_metadata_path = f"{s3_folder}/{local_odc_metadata_path}"
     logger.info("Upload ODC metadata to %s", s3_odc_metadata_path)
     fmc_io.upload_object_to_s3(
         local_odc_metadata_path, s3_odc_metadata_path
