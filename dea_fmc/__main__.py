@@ -322,7 +322,11 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     elif dataset.product.name == "ga_s2cm_ard_3":
         product_name = f"ga_s2cm_fmc_{product_version}"
     else:
-        throw ValueError("Unknown platform")
+        logger.info(
+            "Unknown platform %s Skipping processing.",
+            dataset.product.name,
+        )
+        sys.exit(0)
 
     # Download and load the pre-trained model
     model_path = "RF_AllBands_noLC_DEA_labeless.joblib"
@@ -348,7 +352,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
             "S3 object %s already exists and overwrite is False. Skipping processing.",
             s3_file_uri,
         )
-        return
+        sys.exit(0)
 
     # Load the dataset with specified measurements
     df = dc.load(
