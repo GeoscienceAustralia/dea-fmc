@@ -4,6 +4,7 @@ import os
 import time
 from typing import Any, Dict, Tuple
 from urllib.parse import urlparse
+from pathlib import Path
 
 import boto3
 import botocore
@@ -157,10 +158,15 @@ def check_s3_file_exists(s3_file_uri: str) -> bool:
 
 def download_file_from_s3_public(url, file_path):
     """Download a file from a public S3 URL."""
-    response = requests.get(url)
-    if response.status_code == 200:
-        with open(file_path, "wb") as f:
-            f.write(response.content)
-        logger.info(f"File downloaded successfully from: {url}")
+    my_file = Path(file_path)
+    
+    if not my_file.is_file():
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(file_path, "wb") as f:
+                f.write(response.content)
+            logger.info(f"File downloaded successfully from: {url}")
+        else:
+            logger.error(f"Failed to download file from: {url}")
     else:
-        logger.error(f"Failed to download file from: {url}")
+        logger.info(f"Already download file from: {url}")

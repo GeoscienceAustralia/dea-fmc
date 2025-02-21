@@ -242,6 +242,8 @@ def add_fmc_metadata_files(
         local_thumbnail_path, s3_thumbnail_path
     )
 
+    return local_thumbnail_path, local_odc_metadata_path, local_stac_metadata_path
+
 
 def generate_thumbnail(masked_data: xr.Dataset) -> str:
     """
@@ -384,7 +386,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     logger.info("Uploaded result to: %s", s3_file_uri)
 
     # Generate extended metadata (ODC and STAC) and upload thumbnail
-    add_fmc_metadata_files(
+    local_thumbnail_path, local_odc_metadata_path, local_stac_metadata_path = add_fmc_metadata_files(
         df,
         dataset,
         local_tif,
@@ -395,6 +397,13 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
         local_thumbnail_path,
         s3_folder,
     )
+
+    os.remove(local_thumbnail_path)
+    os.remove(local_odc_metadata_path)
+    os.remove(local_stac_metadata_path)
+    os.remove(local_tif)
+
+    sys.exit(0)
 
 
 # -------------------- Click CLI Commands -------------------- #
