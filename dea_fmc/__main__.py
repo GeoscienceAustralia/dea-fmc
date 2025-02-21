@@ -210,9 +210,9 @@ def add_fmc_metadata_files(
     # Convert to STAC metadata using eo3stac (similar to Burn Cube)
     stac_meta = eo3stac.to_stac_item(
         dataset=meta,
-        stac_item_destination_url=local_stac_metadata_path,
+        stac_item_destination_url=s3_stac_metadata_path,
         dataset_location=s3_folder,
-        odc_dataset_metadata_url=local_odc_metadata_path,
+        odc_dataset_metadata_url=s3_odc_metadata_path,
         explorer_base_url=f"https://explorer.dea.ga.gov.au/product/{product_name}",
     )
     # Write and upload STAC metadata file
