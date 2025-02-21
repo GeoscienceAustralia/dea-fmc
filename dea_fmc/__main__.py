@@ -314,6 +314,9 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     output_folder = process_cfg["output_folder"]
     model_url = process_cfg["model_path"]
     product_version = str(process_cfg["product"]["version"]).replace(".", "-")
+
+    # Load the dataset from Datacube
+    dataset = dc.index.datasets.get(dataset_uuid)
     
     if dataset.product.name == "ga_s2am_ard_3":
         product_name = f"ga_s2am_fmc_{product_version}"
@@ -332,9 +335,6 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     model_path = "RF_AllBands_noLC_DEA_labeless.joblib"
     helper.download_file_from_s3_public(model_url, model_path)
     model = joblib.load(model_path)
-
-    # Load the dataset from Datacube
-    dataset = dc.index.datasets.get(dataset_uuid)
 
     # Define output file details using dataset metadata
     region_code = dataset.metadata.fields["region_code"]
