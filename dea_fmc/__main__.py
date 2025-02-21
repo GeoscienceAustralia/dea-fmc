@@ -114,7 +114,7 @@ def add_fmc_metadata_files(
     as the Burn Cube add_metadata_files method.
     """
     # Create a base title for naming outputs
-    title = f"{product_name}_{region_code}_{acquisition_date}"
+    title = f"{product_name}_{product_version}_{region_code}_{acquisition_date}"
 
     # Initialize the DatasetAssembler using DEA C3 naming conventions
     dataset_assembler = DatasetAssembler(
@@ -319,11 +319,11 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     dataset = dc.index.datasets.get(dataset_uuid)
     
     if dataset.product.name == "ga_s2am_ard_3":
-        product_name = f"ga_s2am_fmc_{product_version}"
+        product_name = f"ga_s2am_fmc"
     elif dataset.product.name == "ga_s2bm_ard_3":
-        product_name = f"ga_s2bm_fmc_{product_version}"
+        product_name = f"ga_s2bm_fmc"
     elif dataset.product.name == "ga_s2cm_ard_3":
-        product_name = f"ga_s2cm_fmc_{product_version}"
+        product_name = f"ga_s2cm_fmc"
     else:
         logger.info(
             "Unknown platform %s Skipping processing.",
@@ -339,7 +339,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     # Define output file details using dataset metadata
     region_code = dataset.metadata.fields["region_code"]
     acquisition_date = dataset.metadata.fields["time"][0].date().strftime("%Y-%m-%d")
-    local_tif = f"{product_name}_{region_code}_{acquisition_date}_fmc.tif"
+    local_tif = f"{product_name}_{product_version}_{region_code}_{acquisition_date}_fmc.tif"
     s3_folder = (
         f"{output_folder}/{product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
         + acquisition_date.replace("-", "/")
