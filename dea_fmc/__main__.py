@@ -176,7 +176,7 @@ def add_fmc_metadata_files(
     tif_ext = os.path.splitext(local_tif)[1]
     dataset_assembler.note_measurement(
         "fmc",
-        f"{title}_fmc{tif_ext}",
+        f"{title}_final_fmc{tif_ext}",
         expand_valid_data=False,
         grid=GridSpec(
             shape=ard_dataset.geobox.shape,
@@ -311,8 +311,16 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     measurements_list = process_cfg["input_products"]["input_bands"]
     output_folder = process_cfg["output_folder"]
     model_url = process_cfg["model_path"]
-    product_name = process_cfg["product"]["name"]
     product_version = str(process_cfg["product"]["version"]).replace(".", "-")
+    
+    if dataset.product.name == "ga_s2am_ard_3":
+        product_name = f"ga_s2am_fmc_{product_version}"
+    elif dataset.product.name == "ga_s2bm_ard_3":
+        product_name = f"ga_s2bm_fmc_{product_version}"
+    elif dataset.product.name == "ga_s2cm_ard_3":
+        product_name = f"ga_s2cm_fmc_{product_version}"
+    else:
+        throw ValueError("Unknown platform")
 
     # Download and load the pre-trained model
     model_path = "RF_AllBands_noLC_DEA_labeless.joblib"
