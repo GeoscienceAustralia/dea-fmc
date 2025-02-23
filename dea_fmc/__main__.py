@@ -92,7 +92,7 @@ def classify_fmc(data: xr.Dataset, model) -> xr.Dataset:
 
     # Create the output Dataset with one measurement: LFMC
     dataset_result = xr.Dataset(
-        {"LFMC": returned_result}, coords=data.coords, attrs=data.attrs
+        {"fmc": returned_result}, coords=data.coords, attrs=data.attrs
     )
     return dataset_result
 
