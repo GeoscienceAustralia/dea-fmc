@@ -159,6 +159,7 @@ def add_fmc_metadata_files(
     dataset_assembler.product_name = product_name
     dataset_assembler.dataset_version = product_version
     dataset_assembler.region_code = region_code
+    dataset_assembler.properties["title"] = title
     dataset_assembler.properties["odc:file_format"] = "GeoTIFF"
     dataset_assembler.properties["odc:producer"] = "ga.gov.au"
     dataset_assembler.properties["odc:product_family"] = "fmc"
@@ -340,7 +341,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     # Define output file details using dataset metadata
     region_code = dataset.metadata.fields["region_code"]
     acquisition_date = dataset.metadata.fields["time"][0].date().strftime("%Y-%m-%d")
-    local_tif = f"{product_name}_{product_version}_{region_code}_{acquisition_date}_fmc.tif"
+    local_tif = f"{product_name}_{product_version}_{region_code}_{acquisition_date}_final_fmc.tif"
     s3_folder = (
         f"{output_folder}/{product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
         + acquisition_date.replace("-", "/")
