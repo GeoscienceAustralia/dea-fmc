@@ -173,11 +173,9 @@ def add_fmc_metadata_files(
     dataset_assembler.processed = dt.utcnow()
     
     # Add measurement note (here we assume one band named "fmc")
-    # We use the local tif extension to keep consistency with the Burn Cube approach
-    tif_ext = os.path.splitext(local_tif)[1]
     dataset_assembler.note_measurement(
         "fmc",
-        f"{title}_final_fmc{tif_ext}",
+        local_tif,
         expand_valid_data=False,
         grid=GridSpec(
             shape=ard_dataset.geobox.shape,
@@ -207,6 +205,7 @@ def add_fmc_metadata_files(
 
     s3_stac_metadata_path = f"{s3_folder}/{local_stac_metadata_path}"
     s3_odc_metadata_path = f"{s3_folder}/{local_odc_metadata_path}"
+    s3_tif_path = f"{s3_folder}/{local_tif}"
 
     # Convert to STAC metadata using eo3stac (similar to Burn Cube)
     stac_meta = eo3stac.to_stac_item(
@@ -216,6 +215,10 @@ def add_fmc_metadata_files(
         odc_dataset_metadata_url=s3_odc_metadata_path,
         explorer_base_url=f"https://explorer.dea.ga.gov.au/product/{product_name}",
     )
+
+    # manually fix geotiff path
+    stac_meta["assets"]["fmc"]["href"] = s3_tif_path
+
     # Write and upload STAC metadata file
     with open(local_stac_metadata_path, "w") as json_file:
         json.dump(stac_meta, json_file, indent=4)
