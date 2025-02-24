@@ -206,6 +206,7 @@ def add_fmc_metadata_files(
     s3_stac_metadata_path = f"{s3_folder}/{local_stac_metadata_path}"
     s3_odc_metadata_path = f"{s3_folder}/{local_odc_metadata_path}"
     s3_tif_path = f"{s3_folder}/{local_tif}"
+    s3_thumbnail_path = f"{s3_folder}/{thumbnail_filename}"
 
     # Convert to STAC metadata using eo3stac (similar to Burn Cube)
     stac_meta = eo3stac.to_stac_item(
@@ -218,6 +219,7 @@ def add_fmc_metadata_files(
 
     # manually fix geotiff path
     stac_meta["assets"]["fmc"]["href"] = s3_tif_path
+    stac_meta["assets"]["thumbnail"]["href"] = s3_thumbnail_path
 
     # Write and upload STAC metadata file
     with open(local_stac_metadata_path, "w") as json_file:
