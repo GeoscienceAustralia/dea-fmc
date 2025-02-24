@@ -56,7 +56,7 @@ def classify_fmc(data: xr.Dataset, model) -> xr.Dataset:
     Perform FMC classification using a pre-trained model.
 
     Calculates NDVI and NDII, reorders bands to match model expectations,
-    flattens the data for prediction, and returns a Dataset with a measurement 'LFMC'.
+    flattens the data for prediction, and returns a Dataset with a measurement 'fmc'.
     """
     # Calculate NDII and NDVI
     data["ndii"] = (data.nbart_nir_1 - data.nbart_swir_2) / (
@@ -90,7 +90,7 @@ def classify_fmc(data: xr.Dataset, model) -> xr.Dataset:
     out_class = model.predict(data_flat)
     returned_result = sklearn_unflatten(out_class, data).transpose()
 
-    # Create the output Dataset with one measurement: LFMC
+    # Create the output Dataset with one measurement: fmc
     dataset_result = xr.Dataset(
         {"fmc": returned_result}, coords=data.coords, attrs=data.attrs
     )
@@ -266,7 +266,7 @@ def generate_thumbnail(masked_data: xr.Dataset) -> str:
     cmap = LinearSegmentedColormap.from_list("fmc", colours, N=256)
 
     # If your data has a singleton 'time' dimension, squeeze it
-    data_to_plot = masked_data.LFMC.squeeze()
+    data_to_plot = masked_data.fmc.squeeze()
 
     # Get the dimensions of the data
     height, width = data_to_plot.shape
@@ -389,7 +389,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     masked_data = masked_data.where(masked_data >= 0, -999).astype("int16")
 
     # Save result as a Cloud Optimized GeoTIFF (COG)
-    write_cog(masked_data.LFMC, fname=local_tif, overwrite=True, nodata=-999)
+    write_cog(masked_data.fmc, fname=local_tif, overwrite=True, nodata=-999)
     logger.info("Result saved as: %s", local_tif)
 
     helper.get_and_set_aws_credentials()
