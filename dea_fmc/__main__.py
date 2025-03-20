@@ -530,6 +530,7 @@ def fmc_processing_with_sqs(
                 click.echo(f"Error processing dataset UUID {dataset_uuid}: {e}")
 
     click.echo("Finished processing messages from SQS.")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
