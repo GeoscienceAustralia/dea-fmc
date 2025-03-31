@@ -509,8 +509,9 @@ def fmc_processing_with_sqs(
             click.echo(
                 f"No messages found in the queue. Attempt {no_message_count} of 10."
             )
-            if no_message_count >= 10:
-                click.echo("No messages after 10 attempts. Exiting.")
+            # set it to 50 to give me more time to debug
+            if no_message_count >= 50:
+                click.echo("No messages after 50 attempts. Exiting.")
                 break
             continue
 
