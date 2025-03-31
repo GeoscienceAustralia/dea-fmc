@@ -326,11 +326,11 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     dataset = dc.index.datasets.get(dataset_uuid)
     
     if dataset.product.name == "ga_s2am_ard_3":
-        product_name = f"ga_s2am_fmc"
+        product_name = "ga_s2am_fmc"
     elif dataset.product.name == "ga_s2bm_ard_3":
-        product_name = f"ga_s2bm_fmc"
+        product_name = "ga_s2bm_fmc"
     elif dataset.product.name == "ga_s2cm_ard_3":
-        product_name = f"ga_s2cm_fmc"
+        product_name = "ga_s2cm_fmc"
     else:
         logger.info(
             "Unknown platform %s Skipping processing.",
