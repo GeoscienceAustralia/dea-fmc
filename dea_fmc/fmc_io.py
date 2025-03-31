@@ -34,12 +34,12 @@ def upload_object_to_s3(local_file_name: str, s3_uri: str) -> None:
 
     s3_bucket_name, s3_object_key = helper.extract_s3_details(s3_uri)
 
-    with open(local_file_name, "rb") as f:
-        s3.put_object(
-            f,
-            s3_bucket_name,
-            s3_object_key,
-        )
+    #with open(local_file_name, "rb") as f:
+    s3.put_object(
+        local_file_name,
+        s3_bucket_name,
+        s3_object_key,
+    )
 
 
 def result_file_saving_and_uploading(
@@ -83,14 +83,14 @@ def result_file_saving_and_uploading(
 
         write_cog(geo_im=da_output, fname=local_tiff_file, overwrite=True)
 
-        with open(local_tiff_file, "rb") as f:
-            s3.put_object(
-                f,
-                s3_bucket_name,
-                object_key + f"_{band.lower()}.tif",
-            )
+         #with open(local_tiff_file, "rb") as f:
+        s3.put_object(
+            local_tiff_file,
+            s3_bucket_name,
+            object_key + f"_{band.lower()}.tif",
+        )
 
-            logger.info(
-                "Upload GeoTiff file: %s",
-                object_key + f"_{band.lower()}.tif",
-            )
+        logger.info(
+            "Upload GeoTiff file: %s",
+            object_key + f"_{band.lower()}.tif",
+        )
