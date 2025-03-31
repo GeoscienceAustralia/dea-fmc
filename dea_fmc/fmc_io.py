@@ -4,7 +4,6 @@ the DEA FMC and AWS S3.
 
 """
 
-
 import logging
 
 import boto3
@@ -33,6 +32,11 @@ def upload_object_to_s3(local_file_name: str, s3_uri: str) -> None:
     s3 = boto3.client("s3")
 
     s3_bucket_name, s3_object_key = helper.extract_s3_details(s3_uri)
+
+    logger.info(
+        "Will upload GeoTiff file: %s",
+        "s3://" + s3_bucket_name + "/" + s3_object_key,
+    )
 
     with open(local_file_name, "rb") as f:
         s3.put_object(
@@ -83,14 +87,14 @@ def result_file_saving_and_uploading(
 
         write_cog(geo_im=da_output, fname=local_tiff_file, overwrite=True)
 
+        logger.info(
+            "Will upload GeoTiff file: %s",
+            "s3://" + s3_bucket_name + "/" + object_key + f"_{band.lower()}.tif",
+        )
+
         with open(local_tiff_file, "rb") as f:
             s3.put_object(
                 Bucket=s3_bucket_name,
                 Key=object_key + f"_{band.lower()}.tif",
                 Body=f,
             )
-
-        logger.info(
-            "Upload GeoTiff file: %s",
-            object_key + f"_{band.lower()}.tif",
-        )
