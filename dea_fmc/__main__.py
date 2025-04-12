@@ -359,60 +359,59 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
             "S3 object %s already exists and overwrite is False. Skipping processing.",
             s3_file_uri,
         )
-        sys.exit(0)
+    else:
+        # Load the dataset with specified measurements
+        df = dc.load(
+            datasets=[dataset],
+            measurements=measurements_list,
+            resolution=(-20, 20),
+            resampling={"*": "bilinear"},
+            output_crs="EPSG:3577",
+        )
 
-    # Load the dataset with specified measurements
-    df = dc.load(
-        datasets=[dataset],
-        measurements=measurements_list,
-        resolution=(-20, 20),
-        resampling={"*": "bilinear"},
-        output_crs="EPSG:3577",
-    )
+        # Create masks: cloud and water masks based on fmask and contiguity
+        cloud_mask = (df.oa_fmask == 2) | (df.oa_fmask == 3)
+        water_mask = (df.oa_fmask == 5) | (df.oa_fmask == 0) | (df.oa_nbart_contiguity == 0)
+        better_cloud_mask = mask_cleanup(
+            mask=cloud_mask, mask_filters=[("opening", 1), ("dilation", 3)]
+        )
+        df = df.drop_vars(["oa_fmask", "oa_nbart_contiguity"])
 
-    # Create masks: cloud and water masks based on fmask and contiguity
-    cloud_mask = (df.oa_fmask == 2) | (df.oa_fmask == 3)
-    water_mask = (df.oa_fmask == 5) | (df.oa_fmask == 0) | (df.oa_nbart_contiguity == 0)
-    better_cloud_mask = mask_cleanup(
-        mask=cloud_mask, mask_filters=[("opening", 1), ("dilation", 3)]
-    )
-    df = df.drop_vars(["oa_fmask", "oa_nbart_contiguity"])
+        # Perform FMC classification
+        fmc_data = classify_fmc(df, model)
+        masked_data = fmc_data.where(~better_cloud_mask & ~water_mask)
 
-    # Perform FMC classification
-    fmc_data = classify_fmc(df, model)
-    masked_data = fmc_data.where(~better_cloud_mask & ~water_mask)
+        # Generate thumbnail before applying no-data control
+        local_thumbnail_path = generate_thumbnail(masked_data)
 
-    # Generate thumbnail before applying no-data control
-    local_thumbnail_path = generate_thumbnail(masked_data)
+        # Set nodata values (-999) for pixels below zero and cast to int16
+        masked_data = masked_data.where(masked_data >= 0, -999).astype("int16")
 
-    # Set nodata values (-999) for pixels below zero and cast to int16
-    masked_data = masked_data.where(masked_data >= 0, -999).astype("int16")
+        # Save result as a Cloud Optimized GeoTIFF (COG)
+        write_cog(masked_data.fmc, fname=local_tif, overwrite=True, nodata=-999)
+        logger.info("Result saved as: %s", local_tif)
 
-    # Save result as a Cloud Optimized GeoTIFF (COG)
-    write_cog(masked_data.fmc, fname=local_tif, overwrite=True, nodata=-999)
-    logger.info("Result saved as: %s", local_tif)
+        helper.get_and_set_aws_credentials()
+        fmc_io.upload_object_to_s3(local_tif, s3_file_uri)
+        logger.info("Uploaded result to: %s", s3_file_uri)
 
-    helper.get_and_set_aws_credentials()
-    fmc_io.upload_object_to_s3(local_tif, s3_file_uri)
-    logger.info("Uploaded result to: %s", s3_file_uri)
+        # Generate extended metadata (ODC and STAC) and upload thumbnail
+        local_thumbnail_path, local_odc_metadata_path, local_stac_metadata_path = add_fmc_metadata_files(
+            df,
+            dataset,
+            local_tif,
+            product_name,
+            product_version,
+            region_code,
+            acquisition_date,
+            local_thumbnail_path,
+            s3_folder,
+        )
 
-    # Generate extended metadata (ODC and STAC) and upload thumbnail
-    local_thumbnail_path, local_odc_metadata_path, local_stac_metadata_path = add_fmc_metadata_files(
-        df,
-        dataset,
-        local_tif,
-        product_name,
-        product_version,
-        region_code,
-        acquisition_date,
-        local_thumbnail_path,
-        s3_folder,
-    )
-
-    os.remove(local_thumbnail_path)
-    os.remove(local_odc_metadata_path)
-    os.remove(local_stac_metadata_path)
-    os.remove(local_tif)
+        os.remove(local_thumbnail_path)
+        os.remove(local_odc_metadata_path)
+        os.remove(local_stac_metadata_path)
+        os.remove(local_tif)
 
 
 # -------------------- Click CLI Commands -------------------- #
@@ -443,8 +442,6 @@ def main() -> None:
 def fmc_processing(dataset_uuid: str, process_cfg_url: str, overwrite: bool) -> None:
     """Process FMC for a given dataset UUID and configuration."""
     process_dataset(dataset_uuid, process_cfg_url, overwrite)
-
-    sys.exit(0)
 
 
 @main.command()
@@ -531,7 +528,6 @@ def fmc_processing_with_sqs(
                 click.echo(f"Error processing dataset UUID {dataset_uuid}: {e}")
 
     click.echo("Finished processing messages from SQS.")
-    sys.exit(0)
 
 
 if __name__ == "__main__":
