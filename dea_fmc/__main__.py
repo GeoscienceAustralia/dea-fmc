@@ -325,18 +325,21 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     # Load the dataset from Datacube
     dataset = dc.index.datasets.get(dataset_uuid)
     
-    if dataset.product.name == "ga_s2am_ard_3":
-        product_name = "ga_s2am_fmc"
-    elif dataset.product.name == "ga_s2bm_ard_3":
-        product_name = "ga_s2bm_fmc"
-    elif dataset.product.name == "ga_s2cm_ard_3":
-        product_name = "ga_s2cm_fmc"
+    if dataset:
+        if dataset.product.name == "ga_s2am_ard_3":
+            product_name = "ga_s2am_fmc"
+        elif dataset.product.name == "ga_s2bm_ard_3":
+            product_name = "ga_s2bm_fmc"
+        elif dataset.product.name == "ga_s2cm_ard_3":
+            product_name = "ga_s2cm_fmc"
+        else:
+            logger.info(
+                "Unknown platform %s Skipping processing.",
+                dataset.product.name,
+            )
+            return
     else:
-        logger.info(
-            "Unknown platform %s Skipping processing.",
-            dataset.product.name,
-        )
-        sys.exit(0)
+        return
 
     # Download and load the pre-trained model
     model_path = "RF_AllBands_noLC_DEA_labeless.joblib"
