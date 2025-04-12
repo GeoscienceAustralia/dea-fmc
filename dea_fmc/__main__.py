@@ -414,8 +414,6 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     os.remove(local_stac_metadata_path)
     os.remove(local_tif)
 
-    sys.exit(0)
-
 
 # -------------------- Click CLI Commands -------------------- #
 
@@ -445,6 +443,8 @@ def main() -> None:
 def fmc_processing(dataset_uuid: str, process_cfg_url: str, overwrite: bool) -> None:
     """Process FMC for a given dataset UUID and configuration."""
     process_dataset(dataset_uuid, process_cfg_url, overwrite)
+
+    sys.exit(0)
 
 
 @main.command()
