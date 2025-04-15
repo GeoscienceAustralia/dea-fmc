@@ -25,6 +25,7 @@ from eodatasets3.assemble import DatasetAssembler, serialise
 from eodatasets3.images import GridSpec
 from matplotlib.colors import LinearSegmentedColormap
 from odc.algo import mask_cleanup
+import s3fs
 from rasterio.crs import CRS
 
 import dea_fmc.__version__
@@ -171,7 +172,7 @@ def add_fmc_metadata_files(
 
     # Record processing time
     dataset_assembler.processed = dt.utcnow()
-    
+
     # Add measurement note (here we assume one band named "fmc")
     dataset_assembler.note_measurement(
         "fmc",
@@ -224,11 +225,9 @@ def add_fmc_metadata_files(
     # Write and upload STAC metadata file
     with open(local_stac_metadata_path, "w") as json_file:
         json.dump(stac_meta, json_file, indent=4)
-    
+
     logger.info("Upload STAC metadata to %s", s3_stac_metadata_path)
-    fmc_io.upload_object_to_s3(
-        local_stac_metadata_path, s3_stac_metadata_path
-    )
+    fmc_io.upload_object_to_s3(local_stac_metadata_path, s3_stac_metadata_path)
 
     # Serialize ODC metadata to YAML and write to file
     meta_stream = io.StringIO()
@@ -237,17 +236,13 @@ def add_fmc_metadata_files(
         yml_file.write(meta_stream.getvalue())
 
     logger.info("Upload ODC metadata to %s", s3_odc_metadata_path)
-    fmc_io.upload_object_to_s3(
-        local_odc_metadata_path, s3_odc_metadata_path
-    )
+    fmc_io.upload_object_to_s3(local_odc_metadata_path, s3_odc_metadata_path)
 
     # we already has the thumbail generate before
     # Upload the generated thumbnail (assumed to be at local_thumbnail_path)
     s3_thumbnail_path = f"{s3_folder}/{thumbnail_filename}"
     logger.info("Upload Thumbnail file to %s", s3_thumbnail_path)
-    fmc_io.upload_object_to_s3(
-        local_thumbnail_path, s3_thumbnail_path
-    )
+    fmc_io.upload_object_to_s3(local_thumbnail_path, s3_thumbnail_path)
 
     return local_thumbnail_path, local_odc_metadata_path, local_stac_metadata_path
 
@@ -324,7 +319,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
 
     # Load the dataset from Datacube
     dataset = dc.index.datasets.get(dataset_uuid)
-    
+
     if dataset:
         if dataset.product.name == "ga_s2am_ard_3":
             product_name = "ga_s2am_fmc"
@@ -374,7 +369,9 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
 
         # Create masks: cloud and water masks based on fmask and contiguity
         cloud_mask = (df.oa_fmask == 2) | (df.oa_fmask == 3)
-        water_mask = (df.oa_fmask == 5) | (df.oa_fmask == 0) | (df.oa_nbart_contiguity == 0)
+        water_mask = (
+            (df.oa_fmask == 5) | (df.oa_fmask == 0) | (df.oa_nbart_contiguity == 0)
+        )
         better_cloud_mask = mask_cleanup(
             mask=cloud_mask, mask_filters=[("opening", 1), ("dilation", 3)]
         )
@@ -399,16 +396,18 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
         logger.info("Uploaded result to: %s", s3_file_uri)
 
         # Generate extended metadata (ODC and STAC) and upload thumbnail
-        local_thumbnail_path, local_odc_metadata_path, local_stac_metadata_path = add_fmc_metadata_files(
-            df,
-            dataset,
-            local_tif,
-            product_name,
-            product_version,
-            region_code,
-            acquisition_date,
-            local_thumbnail_path,
-            s3_folder,
+        local_thumbnail_path, local_odc_metadata_path, local_stac_metadata_path = (
+            add_fmc_metadata_files(
+                df,
+                dataset,
+                local_tif,
+                product_name,
+                product_version,
+                region_code,
+                acquisition_date,
+                local_thumbnail_path,
+                s3_folder,
+            )
         )
 
         os.remove(local_thumbnail_path)
@@ -445,6 +444,47 @@ def main() -> None:
 def fmc_processing(dataset_uuid: str, process_cfg_url: str, overwrite: bool) -> None:
     """Process FMC for a given dataset UUID and configuration."""
     process_dataset(dataset_uuid, process_cfg_url, overwrite)
+
+
+@main.command(no_args_is_help=True)
+@click.option(
+    "--dataset-txt-file",
+    "-d",
+    type=str,
+    required=True,
+    help="S3 URI to a txt file which include UUID to process.",
+)
+@click.option(
+    "--process-cfg-url",
+    "-p",
+    type=str,
+    required=True,
+    help="URL to FMC process configuration file in YAML format.",
+)
+@click.option(
+    "--overwrite/--no-overwrite",
+    default=False,
+    help="Rerun scenes that have already been processed.",
+)
+def fmc_processing_with_list(
+    dataset_txt_file: str, process_cfg_url: str, overwrite: bool
+) -> None:
+    """Continuously load messages from TXT file and process each dataset using FMC classification."""
+    dataset_list = []
+
+    fs = s3fs.S3FileSystem(anon=False)
+    with fs.open(dataset_txt_file, "r") as file:
+        for line in file:
+            dataset_list.append(line.strip())
+
+    logger.info("Found %s datasets", str(len(dataset_list)))
+
+    for dataset_uuid in dataset_list:
+        click.echo(f"Processing dataset UUID: {dataset_uuid}")
+        try:
+            process_dataset(dataset_uuid, process_cfg_url, overwrite)
+        except Exception as e:
+            click.echo(f"Error processing dataset UUID {dataset_uuid}: {e}")
 
 
 @main.command()
