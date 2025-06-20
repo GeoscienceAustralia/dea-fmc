@@ -299,13 +299,6 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     # Initialize Datacube instance
     dc = datacube.Datacube(
         app="fmc_processing",
-        config={
-            "db_hostname": os.getenv("ODC_DB_HOSTNAME"),
-            "db_password": os.getenv("ODC_DB_PASSWORD"),
-            "db_username": os.getenv("ODC_DB_USERNAME"),
-            "db_port": 5432,
-            "db_database": os.getenv("ODC_DB_DATABASE"),
-        },
     )
 
     os.environ["AWS_NO_SIGN_REQUEST"] = "Yes"
