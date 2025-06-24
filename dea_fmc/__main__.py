@@ -342,6 +342,19 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
         )
         return
 
+        # follow the current Landsat ARD gqa filter logic
+    if dataset.metadata_doc["properties"]["dea:dataset_maturity"].lower() == "final":
+        logger.info(
+            "S2 ARD dataset %s pass the dataset maturity filter.",
+            str(dataset_uuid),
+        )
+    else:
+        logger.info(
+            "S2 ARD dataset %s is NRT dataset, and it does not pass the dataset maturity filter.",
+            str(dataset_uuid),
+        )
+        return
+
     # Download and load the pre-trained model
     model_path = "RF_AllBands_noLC_DEA_labeless.joblib"
     helper.download_file_from_s3_public(model_url, model_path)
