@@ -329,6 +329,19 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     else:
         return
 
+    # follow the current Landsat ARD gqa filter logic
+    if abs(dataset.metadata_doc["properties"]["gqa:abs_iterative_mean_xy"]) <= 1:
+        logger.info(
+            "S2 ARD dataset %s pass the GQA filter.",
+            str(dataset_uuid),
+        )
+    else:
+        logger.info(
+            "S2 ARD dataset %s does not pass the GQA filter.",
+            str(dataset_uuid),
+        )
+        return
+
     # Download and load the pre-trained model
     model_path = "RF_AllBands_noLC_DEA_labeless.joblib"
     helper.download_file_from_s3_public(model_url, model_path)
