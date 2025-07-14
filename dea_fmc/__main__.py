@@ -545,7 +545,7 @@ def submit_message(dataset_uuid: str, queue_url: str) -> None:
 )
 @click.option(
     "--overwrite/--no-overwrite",
-    default=True,
+    default=False,
     help="Rerun scenes that have already been processed.",
 )
 def fmc_processing_with_sqs(
