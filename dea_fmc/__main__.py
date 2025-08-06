@@ -201,7 +201,7 @@ def add_fmc_metadata_files(
     meta = dataset_assembler.to_dataset_doc()
 
     # Define local filenames for the STAC and ODC metadata files
-    local_stac_metadata_path = f"{title}.stac.json"
+    local_stac_metadata_path = f"{title}.stac-item.json"
     local_odc_metadata_path = f"{title}.odc.yaml"
 
     s3_stac_metadata_path = f"{s3_folder}/{local_stac_metadata_path}"
