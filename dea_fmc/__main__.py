@@ -104,6 +104,7 @@ def add_fmc_metadata_files(
     acquisition_date: str,
     local_thumbnail_path: str,
     s3_folder: str,
+    global_product_name: str,
 ) -> None:
     """
     Generate extended metadata for FMC using eodatasets3, convert to both ODC and STAC formats,
@@ -116,7 +117,7 @@ def add_fmc_metadata_files(
     # Initialize the DatasetAssembler using DEA C3 naming conventions
     dataset_assembler = DatasetAssembler(
         naming_conventions="dea_c3",
-        dataset_location=Path(f"https://explorer.dea.ga.gov.au/product/{product_name}"),
+        dataset_location=Path(f"https://explorer.dea.ga.gov.au/product/{global_product_name}"),
         allow_absolute_paths=True,
     )
 
@@ -153,7 +154,7 @@ def add_fmc_metadata_files(
     dataset_assembler.properties["dtr:end_datetime"] = dt_obj.isoformat()
 
     # Set product details
-    dataset_assembler.product_name = product_name
+    dataset_assembler.product_name = global_product_name
     dataset_assembler.dataset_version = product_version
     dataset_assembler.region_code = region_code
     dataset_assembler.properties["title"] = title
@@ -211,7 +212,7 @@ def add_fmc_metadata_files(
         stac_item_destination_url=s3_stac_metadata_path,
         dataset_location=s3_folder,
         odc_dataset_metadata_url=s3_odc_metadata_path,
-        explorer_base_url=f"https://explorer.dea.ga.gov.au/product/{product_name}",
+        explorer_base_url=f"https://explorer.dea.ga.gov.au/product/{global_product_name}",
     )
 
     # manually fix geotiff path
@@ -426,6 +427,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
                 acquisition_date,
                 local_thumbnail_path,
                 s3_folder,
+                global_product_name,
             )
         )
 
