@@ -377,13 +377,16 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
             s3_file_uri,
         )
     else:
+        #find native crs of dataset
+        ds_crs = dc.index.datasets.get(dataset).metadata_doc['crs']
+        
         # Load the dataset with specified measurements
         df = dc.load(
             datasets=[dataset],
             measurements=measurements_list,
             resolution=(-20, 20),
             resampling={"*": "bilinear"},
-            output_crs="EPSG:3577",
+            output_crs=ds_crs,
         )
 
         # Create masks: cloud and water masks based on fmask and contiguity
