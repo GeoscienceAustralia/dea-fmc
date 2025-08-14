@@ -194,6 +194,8 @@ def add_fmc_metadata_files(
     # dataset_assembler._accessories["metadata:processor"] = processor_filename
     dataset_assembler._accessories["thumbnail"] = thumbnail_filename
 
+    dataset_assembler.label = title + "_final"
+
     # Convert the assembled metadata to an ODC dataset document
     meta = dataset_assembler.to_dataset_doc()
 
@@ -226,8 +228,6 @@ def add_fmc_metadata_files(
     logger.info("Upload STAC metadata to %s", s3_stac_metadata_path)
     fmc_io.upload_object_to_s3(local_stac_metadata_path, s3_stac_metadata_path)
 
-    # hard code to overwrite the label in meta
-    meta["label"] = title + "_final"
 
     # Serialize ODC metadata to YAML and write to file
     meta_stream = io.StringIO()
