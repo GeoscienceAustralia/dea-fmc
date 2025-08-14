@@ -107,15 +107,10 @@ def generate_and_upload_metadata(
     :param s3_paths: A dictionary of S3 URIs for the output files.
     :param local_paths: A dictionary of local paths for the output files.
     """
-<<<<<<< HEAD
     product_cfg = cfg["product"]
     region_code = dc_dataset.metadata.fields["region_code"]
     acquisition_date = dc_dataset.metadata.fields["time"][0].date()
     title = f"{s3_paths['product_name']}_{region_code}_{acquisition_date:%Y-%m-%d}"
-=======
-    # Create a base title for naming outputs
-    title = f"{product_name}_{region_code}_{acquisition_date}"
->>>>>>> f7240242b249490e8c6eac4581b0b994cc7fbc6a
 
     LOGGER.info("Starting metadata generation.")
     
@@ -291,34 +286,9 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
         helper.download_file_from_s3_public(cfg["model_path"], local_model_path)
         model = joblib.load(local_model_path)
 
-<<<<<<< HEAD
         # Load ARD data
         ds_crs = dataset.metadata_doc['crs']
         input_data = dc.load(
-=======
-    # Define output file details using dataset metadata
-    region_code = dataset.metadata.fields["region_code"]
-    acquisition_date = dataset.metadata.fields["time"][0].date().strftime("%Y-%m-%d")
-    local_tif = f"{product_name}_{region_code}_{acquisition_date}_final_fmc.tif"
-    s3_folder = (
-        f"{output_folder}/{global_product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
-        + acquisition_date.replace("-", "/")
-    )
-    s3_file_uri = f"{s3_folder}/{local_tif}"
-
-    # Skip processing if output exists and overwrite is False
-    if not overwrite and helper.check_s3_file_exists(s3_file_uri):
-        logger.info(
-            "S3 object %s already exists and overwrite is False. Skipping processing.",
-            s3_file_uri,
-        )
-    else:
-        #find native crs of dataset
-        ds_crs = dc.index.datasets.get(dataset_uuid).metadata_doc['crs']
-        
-        # Load the dataset with specified measurements
-        df = dc.load(
->>>>>>> f7240242b249490e8c6eac4581b0b994cc7fbc6a
             datasets=[dataset],
             measurements=cfg["input_products"]["input_bands"],
             resolution=(-20, 20),
