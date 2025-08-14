@@ -379,7 +379,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
         )
     else:
         #find native crs of dataset
-        ds_crs = dc.index.datasets.get(dataset).metadata_doc['crs']
+        ds_crs = dc.index.datasets.get(dataset_uuid).metadata_doc['crs']
         
         # Load the dataset with specified measurements
         df = dc.load(
