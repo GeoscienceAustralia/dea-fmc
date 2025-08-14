@@ -226,6 +226,9 @@ def add_fmc_metadata_files(
     logger.info("Upload STAC metadata to %s", s3_stac_metadata_path)
     fmc_io.upload_object_to_s3(local_stac_metadata_path, s3_stac_metadata_path)
 
+    # hard code to overwrite the label in meta
+    meta["label"] = title + "_final"
+
     # Serialize ODC metadata to YAML and write to file
     meta_stream = io.StringIO()
     serialise.to_stream(meta_stream, meta)
