@@ -322,7 +322,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
             }
 
         # Generate thumbnail *before* applying final nodata value
-        generate_thumbnail(masked_fmc, local_paths['thumbnail'])
+        generate_thumbnail(masked_fmc.fmc, local_paths['thumbnail'])
 
         # Set final nodata value and cast to integer
         masked_fmc = masked_fmc.where(masked_fmc >= 0, NODATA_VALUE).astype("int16")
