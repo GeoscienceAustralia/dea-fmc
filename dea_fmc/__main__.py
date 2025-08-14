@@ -309,17 +309,18 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     output_folder = process_cfg["output_folder"]
     model_url = process_cfg["model_path"]
     product_version = str(process_cfg["product"]["version"]).replace(".", "-")
+    global_product_name = process_cfg["product"]["name"] # this one use to define the output folder
 
     # Load the dataset from Datacube
     dataset = dc.index.datasets.get(dataset_uuid)
 
     if dataset:
         if dataset.product.name == "ga_s2am_ard_3":
-            product_name = "ga_s2am_fmc"
+            product_name = "ga_s2am_fmc_3"
         elif dataset.product.name == "ga_s2bm_ard_3":
-            product_name = "ga_s2bm_fmc"
+            product_name = "ga_s2bm_fmc_3"
         elif dataset.product.name == "ga_s2cm_ard_3":
-            product_name = "ga_s2cm_fmc"
+            product_name = "ga_s2cm_fmc_3"
         else:
             logger.info(
                 "Unknown platform %s Skipping processing.",
@@ -365,7 +366,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     acquisition_date = dataset.metadata.fields["time"][0].date().strftime("%Y-%m-%d")
     local_tif = f"{product_name}_{product_version}_{region_code}_{acquisition_date}_final_fmc.tif"
     s3_folder = (
-        f"{output_folder}/{product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
+        f"{output_folder}/{global_product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
         + acquisition_date.replace("-", "/")
     )
     s3_file_uri = f"{s3_folder}/{local_tif}"
