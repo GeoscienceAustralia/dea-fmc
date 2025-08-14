@@ -309,7 +309,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     output_folder = process_cfg["output_folder"]
     model_url = process_cfg["model_path"]
     product_version = str(process_cfg["product"]["version"]).replace(".", "-")
-    global_product_name = process_cfg["product"]["name"] # this one use to define the output folder
+    global_product_name = process_cfg["product"]["name"]  # this one use to define the output folder
 
     # Load the dataset from Datacube
     dataset = dc.index.datasets.get(dataset_uuid)
@@ -379,7 +379,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
         )
     else:
         #find native crs of dataset
-        ds_crs = dc.index.datasets.get(dataset).metadata_doc['crs']
+        ds_crs = dc.index.datasets.get(dataset_uuid).metadata_doc['crs']
         
         # Load the dataset with specified measurements
         df = dc.load(
