@@ -115,7 +115,7 @@ def add_fmc_metadata_files(
     as the Burn Cube add_metadata_files method.
     """
     # Create a base title for naming outputs
-    title = f"{product_name}_{product_version}_{region_code}_{acquisition_date}"
+    title = f"{product_name}_{region_code}_{acquisition_date}"
 
     # Initialize the DatasetAssembler using DEA C3 naming conventions
     dataset_assembler = DatasetAssembler(
@@ -364,7 +364,7 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     # Define output file details using dataset metadata
     region_code = dataset.metadata.fields["region_code"]
     acquisition_date = dataset.metadata.fields["time"][0].date().strftime("%Y-%m-%d")
-    local_tif = f"{product_name}_{product_version}_{region_code}_{acquisition_date}_final_fmc.tif"
+    local_tif = f"{product_name}_{region_code}_{acquisition_date}_final_fmc.tif"
     s3_folder = (
         f"{output_folder}/{global_product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
         + acquisition_date.replace("-", "/")
