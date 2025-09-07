@@ -104,7 +104,6 @@ def add_fmc_metadata_files(
     acquisition_date: str,
     local_thumbnail_path: str,
     s3_folder: str,
-    global_product_name: str,
 ) -> None:
     """
     Generate extended metadata for FMC using eodatasets3, convert to both ODC and STAC formats,
@@ -117,7 +116,7 @@ def add_fmc_metadata_files(
     # Initialize the DatasetAssembler using DEA C3 naming conventions
     dataset_assembler = DatasetAssembler(
         naming_conventions="dea_c3",
-        dataset_location=Path(f"https://explorer.dea.ga.gov.au/product/{global_product_name}"),
+        dataset_location=Path(f"https://explorer.dea.ga.gov.au/product/{product_name}"),
         allow_absolute_paths=True,
     )
 
@@ -154,7 +153,7 @@ def add_fmc_metadata_files(
     dataset_assembler.properties["dtr:end_datetime"] = dt_obj.isoformat()
 
     # Set product details
-    dataset_assembler.product_name = global_product_name
+    dataset_assembler.product_name = product_name
     dataset_assembler.dataset_version = product_version
     dataset_assembler.region_code = region_code
     dataset_assembler.properties["title"] = title
@@ -163,6 +162,7 @@ def add_fmc_metadata_files(
     dataset_assembler.properties["odc:product_family"] = "fmc"
     dataset_assembler.maturity = "final"
     dataset_assembler.collection_number = 3
+    dataset_assembler.properties["eo:gsd"] = 20
 
     # Restore warning settings
     warnings.filterwarnings("default")
@@ -194,8 +194,6 @@ def add_fmc_metadata_files(
     # dataset_assembler._accessories["metadata:processor"] = processor_filename
     dataset_assembler._accessories["thumbnail"] = thumbnail_filename
 
-    dataset_assembler.label = title + "_final"
-
     # Convert the assembled metadata to an ODC dataset document
     meta = dataset_assembler.to_dataset_doc()
 
@@ -214,7 +212,7 @@ def add_fmc_metadata_files(
         stac_item_destination_url=s3_stac_metadata_path,
         dataset_location=s3_folder,
         odc_dataset_metadata_url=s3_odc_metadata_path,
-        explorer_base_url=f"https://explorer.dea.ga.gov.au/product/{global_product_name}",
+        explorer_base_url=f"https://explorer.dea.ga.gov.au/product/{product_name}",
     )
 
     # manually fix geotiff path
@@ -309,26 +307,11 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     output_folder = process_cfg["output_folder"]
     model_url = process_cfg["model_path"]
     product_version = str(process_cfg["product"]["version"]).replace(".", "-")
-    global_product_name = process_cfg["product"]["name"] # this one use to define the output folder
+    product_name = process_cfg["product"]["name"]  # this one use to define the output folder
 
     # Load the dataset from Datacube
     dataset = dc.index.datasets.get(dataset_uuid)
 
-    if dataset:
-        if dataset.product.name == "ga_s2am_ard_3":
-            product_name = "ga_s2am_fmc_3"
-        elif dataset.product.name == "ga_s2bm_ard_3":
-            product_name = "ga_s2bm_fmc_3"
-        elif dataset.product.name == "ga_s2cm_ard_3":
-            product_name = "ga_s2cm_fmc_3"
-        else:
-            logger.info(
-                "Unknown platform %s Skipping processing.",
-                dataset.product.name,
-            )
-            return
-    else:
-        return
 
     # follow the current Landsat ARD gqa filter logic
     if abs(dataset.metadata_doc["properties"]["gqa:abs_iterative_mean_xy"]) <= 1:
@@ -365,9 +348,18 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
     region_code = dataset.metadata.fields["region_code"]
     acquisition_date = dataset.metadata.fields["time"][0].date().strftime("%Y-%m-%d")
     local_tif = f"{product_name}_{region_code}_{acquisition_date}_final_fmc.tif"
+
+    s2_scene_capture_time = dataset.metadata_doc["properties"]["sentinel:datatake_start_datetime"]
+
+    # Parse into datetime object
+    dt = dt.strptime(s2_scene_capture_time, "%Y-%m-%dT%H:%M:%SZ")
+
+    # Format into desired style
+    formatted_s2_scene_capture_time = dt.strftime("%Y%m%dT%H%M%S")
+
     s3_folder = (
-        f"{output_folder}/{global_product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
-        + acquisition_date.replace("-", "/")
+        f"{output_folder}/{product_name}/{product_version}/{region_code[:2]}/{region_code[2:]}/"
+        + acquisition_date.replace("-", "/") + "/" + formatted_s2_scene_capture_time
     )
     s3_file_uri = f"{s3_folder}/{local_tif}"
 
@@ -430,7 +422,6 @@ def process_dataset(dataset_uuid: str, process_cfg_url: str, overwrite: bool) ->
                 acquisition_date,
                 local_thumbnail_path,
                 s3_folder,
-                global_product_name,
             )
         )
 
