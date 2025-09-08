@@ -118,7 +118,7 @@ def add_fmc_metadata_files(
     local_tif_path: str,
     product_name: str,
     product_version: str,
-    acquisition_date: str,
+    title: str,
     acquisition_time: str,
     local_thumbnail_path: str,
     s3_folder: str,
@@ -127,7 +127,6 @@ def add_fmc_metadata_files(
     Generate and upload ODC and STAC metadata for the FMC product.
     """
     region_code = dc_dataset.metadata.region_code
-    title = f"{product_name}_{region_code}_{acquisition_date}"
 
     thumbnail_filename = f"{title}_thumbnail.jpg"
     local_stac_path = f"{title}.stac-item.json"
@@ -259,7 +258,8 @@ def process_dataset(dataset_uuid: str, process_cfg: Dict[str, Any], dc: datacube
         f"{region_code[:2]}/{region_code[2:]}/"
         f"{acquisition_date.replace('-', '/')}/{formatted_capture_time}"
     )
-    base_filename = f"{product_name.split('v')[0] + 'v' + product_version}_{region_code}_{acquisition_date}_final_fmc"
+    title = f"{product_name.split('v')[0] + 'v' + product_version}_{region_code}_{acquisition_date}"
+    base_filename = f"{title}_final_fmc"
     s3_tif_uri = f"{s3_folder}/{base_filename}.tif"
 
     if not overwrite and helper.check_s3_file_exists(s3_tif_uri):
@@ -309,7 +309,7 @@ def process_dataset(dataset_uuid: str, process_cfg: Dict[str, Any], dc: datacube
         # 9. Generate and upload metadata
         add_fmc_metadata_files(
             ard_dataset, dataset, local_tif, product_name, product_version,
-            acquisition_date, acquisition_time, local_thumbnail, s3_folder,
+            title, acquisition_time, local_thumbnail, s3_folder,
         )
 
 
