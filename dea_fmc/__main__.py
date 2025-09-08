@@ -357,16 +357,26 @@ def main() -> None:
 def run_single(dataset_uuid: str, process_cfg_url: str, overwrite: bool) -> None:
     """Process a single dataset UUID."""
     process_cfg = helper.load_yaml_remote(process_cfg_url)
-    model_path = helper.download_file_from_s3_public(process_cfg["model_path"])
-    model = joblib.load(model_path)
     dc = datacube.Datacube(app="fmc_single_processor")
     
+    # Define a temporary local path for the model file
+    local_model_path = "temp_model.joblib"
+
     try:
+        # Download the model from the URL in the config to the local path
+        helper.download_file_from_s3_public(process_cfg["model_path"], local_model_path)
+        model = joblib.load(local_model_path)
+        
+        # Process the dataset using the loaded model
         process_dataset(dataset_uuid, process_cfg, dc, model, overwrite)
+        
     except Exception:
         logger.exception("Processing failed for UUID %s", dataset_uuid)
     finally:
-        os.remove(model_path)
+        # Ensure the downloaded model file is cleaned up
+        if os.path.exists(local_model_path):
+            os.remove(local_model_path)
+            logger.info("Cleaned up temporary model file.")
 
 
 @main.command()
@@ -376,20 +386,26 @@ def run_single(dataset_uuid: str, process_cfg_url: str, overwrite: bool) -> None
 def run_from_file(dataset_txt_file: str, process_cfg_url: str, overwrite: bool) -> None:
     """Process a list of dataset UUIDs from a text file on S3."""
     process_cfg = helper.load_yaml_remote(process_cfg_url)
-    model_path = helper.download_file_from_s3_public(process_cfg["model_path"])
-    model = joblib.load(model_path)
     dc = datacube.Datacube(app="fmc_file_processor")
     
-    uuid_iterator = get_uuid_iterator_from_file(dataset_txt_file)
-    for uuid in uuid_iterator:
-        try:
-            logger.info("Processing dataset UUID: %s", uuid)
-            process_dataset(uuid, process_cfg, dc, model, overwrite)
-        except Exception:
-            logger.exception("Processing failed for UUID %s", uuid)
-            continue  # Move to the next UUID
+    local_model_path = "temp_model.joblib"
     
-    os.remove(model_path)
+    try:
+        helper.download_file_from_s3_public(process_cfg["model_path"], local_model_path)
+        model = joblib.load(local_model_path)
+    
+        uuid_iterator = get_uuid_iterator_from_file(dataset_txt_file)
+        for uuid in uuid_iterator:
+            try:
+                logger.info("Processing dataset UUID: %s", uuid)
+                process_dataset(uuid, process_cfg, dc, model, overwrite)
+            except Exception:
+                logger.exception("Processing failed for UUID %s. Continuing to next.", uuid)
+                continue
+    finally:
+        if os.path.exists(local_model_path):
+            os.remove(local_model_path)
+            logger.info("Cleaned up temporary model file.")
 
 
 @main.command()
@@ -399,22 +415,28 @@ def run_from_file(dataset_txt_file: str, process_cfg_url: str, overwrite: bool) 
 def run_from_sqs(queue_url: str, process_cfg_url: str, overwrite: bool) -> None:
     """Continuously process dataset UUIDs from an AWS SQS queue."""
     process_cfg = helper.load_yaml_remote(process_cfg_url)
-    model_path = helper.download_file_from_s3_public(process_cfg["model_path"])
-    model = joblib.load(model_path)
     dc = datacube.Datacube(app="fmc_sqs_processor")
     sqs_client = boto3.client("sqs")
 
-    for uuid, receipt_handle in get_uuid_iterator_from_sqs(queue_url):
-        try:
-            logger.info("Processing dataset UUID: %s", uuid)
-            process_dataset(uuid, process_cfg, dc, model, overwrite)
-            sqs_client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
-            logger.info("Successfully processed and deleted message for %s", uuid)
-        except Exception:
-            logger.exception("Processing failed for UUID %s. Message will not be deleted.", uuid)
-            continue
-            
-    os.remove(model_path)
+    local_model_path = "temp_model.joblib"
+
+    try:
+        helper.download_file_from_s3_public(process_cfg["model_path"], local_model_path)
+        model = joblib.load(local_model_path)
+
+        for uuid, receipt_handle in get_uuid_iterator_from_sqs(queue_url):
+            try:
+                logger.info("Processing dataset UUID: %s", uuid)
+                process_dataset(uuid, process_cfg, dc, model, overwrite)
+                sqs_client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+                logger.info("Successfully processed and deleted message for %s", uuid)
+            except Exception:
+                logger.exception("Processing failed for UUID %s. Message will not be deleted.", uuid)
+                continue
+    finally:
+        if os.path.exists(local_model_path):
+            os.remove(local_model_path)
+            logger.info("Cleaned up temporary model file.")
 
 
 if __name__ == "__main__":
