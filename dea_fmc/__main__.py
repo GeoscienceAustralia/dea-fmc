@@ -258,7 +258,7 @@ def process_dataset(dataset_uuid: str, process_cfg: Dict[str, Any], dc: datacube
         f"{region_code[:2]}/{region_code[2:]}/"
         f"{acquisition_date.replace('-', '/')}/{formatted_capture_time}"
     )
-    base_filename = f"{product_name.split('v')[0] + '_v' + product_version}_{region_code}_{acquisition_date}_final_fmc"
+    base_filename = f"{product_name.split('v')[0] + 'v' + product_version}_{region_code}_{acquisition_date}_final_fmc"
     s3_tif_uri = f"{s3_folder}/{base_filename}.tif"
 
     if not overwrite and helper.check_s3_file_exists(s3_tif_uri):
