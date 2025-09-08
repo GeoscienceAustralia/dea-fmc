@@ -129,6 +129,14 @@ def add_fmc_metadata_files(
     region_code = dc_dataset.metadata.region_code
     title = f"{product_name}_{region_code}_{acquisition_date}"
 
+    thumbnail_filename = f"{title}_thumbnail.jpg"
+    local_stac_path = f"{title}.stac-item.json"
+    local_odc_path = f"{title}.odc-metadata.yaml"
+    s3_stac_path = f"{s3_folder}/{local_stac_path}"
+    s3_odc_path = f"{s3_folder}/{local_odc_path}"
+    s3_tif_path = f"{s3_folder}/{Path(local_tif_path).name}"
+    s3_thumbnail_path = f"{s3_folder}/{thumbnail_filename}"
+
     # Initialize the DatasetAssembler
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
@@ -169,7 +177,7 @@ def add_fmc_metadata_files(
     # Add measurement and accessory info
     assembler.note_measurement(
         "fmc",
-        local_tif_path,
+        Path(local_tif_path).name,
         expand_valid_data=False,
         grid=GridSpec(
             shape=ard_dataset.geobox.shape,
@@ -178,18 +186,11 @@ def add_fmc_metadata_files(
         ),
         nodata=NODATA_VALUE,
     )
-    thumbnail_filename = f"{title}_thumbnail.jpg"
     assembler._accessories["thumbnail"] = thumbnail_filename
 
     # --- ODC and STAC File Generation ---
     odc_doc = assembler.to_dataset_doc()
 
-    local_stac_path = f"{title}.stac-item.json"
-    local_odc_path = f"{title}.odc-metadata.yaml"
-    s3_stac_path = f"{s3_folder}/{local_stac_path}"
-    s3_odc_path = f"{s3_folder}/{local_odc_path}"
-    s3_tif_path = f"{s3_folder}/{Path(local_tif_path).name}"
-    s3_thumbnail_path = f"{s3_folder}/{thumbnail_filename}"
 
     # Create STAC item and correct asset paths
     stac_item = eo3stac.to_stac_item(
