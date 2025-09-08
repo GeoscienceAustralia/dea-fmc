@@ -179,7 +179,7 @@ def add_fmc_metadata_files(
         nodata=NODATA_VALUE,
     )
     thumbnail_filename = f"{title}_thumbnail.jpg"
-    assembler.add_accessory("thumbnail", thumbnail_filename)
+    assembler._accessories["thumbnail"] = thumbnail_filename
 
     # --- ODC and STAC File Generation ---
     odc_doc = assembler.to_dataset_doc()
