@@ -91,11 +91,36 @@ def classify_fmc(data: xr.Dataset, model: Any) -> xr.Dataset:
 
 def generate_thumbnail(masked_data: xr.Dataset, output_path: str) -> None:
     """
-    Generate a thumbnail image from masked data using a custom colormap.
+    Generate a thumbnail image from masked data using a custom colormap,
+    after compressing the data by a factor of 100 by merging pixels.
     """
     colours = [(0.87, 0, 0), (1, 1, 0.73), (0.165, 0.615, 0.957)]  # Red, Yellow, Blue
     cmap = LinearSegmentedColormap.from_list("fmc", colours, N=256)
-    data_to_plot = masked_data.fmc.squeeze()
+    
+    # Extract the data as a NumPy array
+    original_data = masked_data.fmc.squeeze().to_numpy()
+
+    # --- Compression Step ---
+    # To compress by 100x, we downsample by 10x in each dimension (10*10=100)
+    compression_factor = 10
+    original_height, original_width = original_data.shape
+
+    # Calculate the new dimensions for the compressed image
+    new_height = original_height // compression_factor
+    new_width = original_width // compression_factor
+
+    # Crop the data to ensure its dimensions are perfectly divisible by the factor
+    cropped_data = original_data[:new_height * compression_factor, :new_width * compression_factor]
+
+    # Reshape the array into blocks of (10x10) and compute the mean of each block.
+    # This effectively "merges" the pixels.
+    compressed_data = cropped_data.reshape(
+        new_height, compression_factor, new_width, compression_factor
+    ).mean(axis=(1, 3))
+
+    data_to_plot = compressed_data
+    # --- End of Compression Step ---
+
     height, width = data_to_plot.shape
     dpi = 100
 
@@ -207,6 +232,9 @@ def add_fmc_metadata_files(
         json.dump(stac_item, f, indent=4)
     logger.info("Uploading STAC metadata to %s", s3_stac_path)
     fmc_io.upload_object_to_s3(local_stac_path, s3_stac_path)
+
+    # overwrite the default label
+    odc_doc.label = title
 
     # Write and upload ODC metadata
     with io.StringIO() as meta_stream, open(local_odc_path, "w") as f:
