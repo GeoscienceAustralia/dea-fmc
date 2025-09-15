@@ -262,9 +262,9 @@ def process_dataset(dataset_uuid: str, process_cfg: Dict[str, Any], dc: datacube
         logger.error("Could not find dataset with UUID: %s", dataset_uuid)
         return
 
-    if abs(dataset.metadata_doc["properties"]["gqa:abs_iterative_mean_xy"]) > 1:
-        logger.info("Dataset %s failed GQA filter.", dataset_uuid)
-        return
+    #if abs(dataset.metadata_doc["properties"]["gqa:abs_iterative_mean_xy"]) > 1:
+    #    logger.info("Dataset %s failed GQA filter.", dataset_uuid)
+    #    return
     if dataset.metadata_doc["properties"]["dea:dataset_maturity"].lower() != "final":
         logger.info("Dataset %s failed maturity filter (not 'final').", dataset_uuid)
         return
