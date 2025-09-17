@@ -256,6 +256,10 @@ def process_dataset(dataset_uuid: str, process_cfg: Dict[str, Any], dc: datacube
     """
     Orchestrates the FMC processing for a single dataset UUID.
     """
+
+    # reset the AWS credentials to ensure we have access to public data
+    os.environ["AWS_NO_SIGN_REQUEST"] = "Yes"
+
     # 1. Load dataset and apply filters
     dataset = dc.index.datasets.get(dataset_uuid)
     if not dataset:
