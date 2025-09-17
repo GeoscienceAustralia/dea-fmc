@@ -278,7 +278,7 @@ def process_dataset(dataset_uuid: str, process_cfg: Dict[str, Any], dc: datacube
     acquisition_time = dataset.metadata.time.begin.isoformat(timespec="microseconds").replace("+00:00", "Z")
 
     capture_time_str = dataset.metadata_doc["properties"]["sentinel:datatake_start_datetime"]
-    dt_obj = dt.fromisoformat(capture_time_str)
+    dt_obj = dt.fromisoformat(capture_time_str[:19])  # Remove timezone for strptime
     formatted_capture_time = dt_obj.strftime("%Y%m%dT%H%M%S")
 
     s3_folder = (
