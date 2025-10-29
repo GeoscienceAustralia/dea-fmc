@@ -17,7 +17,8 @@ import tempfile
 import warnings
 from datetime import datetime as dt
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Tuple
+from typing import Any, Dict, Iterator, List, Tuple, Optional
+from uuid import UUID
 
 import boto3
 import click
@@ -215,7 +216,6 @@ def add_fmc_metadata_files(
     # --- ODC and STAC File Generation ---
     odc_doc = assembler.to_dataset_doc()
 
-
     # Create STAC item and correct asset paths
     stac_item = eo3stac.to_stac_item(
         dataset=odc_doc,
@@ -355,23 +355,131 @@ def get_uuid_iterator_from_file(s3_uri: str) -> Iterator[str]:
             yield line.strip()
 
 
+# --- SQS Body → UUID Parsing Helpers ---
+
+def _is_valid_uuid(value: str) -> bool:
+    try:
+        UUID(str(value))
+        return True
+    except Exception:
+        return False
+
+
+def _extract_uuid_from_parsed(obj) -> Optional[str]:
+    """
+    Try common shapes to find a UUID in a parsed JSON object.
+    Supports:
+      - STAC Feature: {"id": "<uuid>", ...}
+      - Custom key: {"dataset_uuid": "<uuid>"}
+      - Nested wrappers: {"feature": {...}}, {"stac": {...}}, {"payload": {...}}
+      - SNS envelope: {"Message": "..."} where Message may be a UUID or JSON string
+    """
+    # SNS-style envelope (Message is often a stringified JSON or UUID)
+    if isinstance(obj, dict) and isinstance(obj.get("Message"), str):
+        inner = _extract_uuid_from_body(obj["Message"])
+        if inner:
+            return inner
+
+    # Direct STAC Feature "id"
+    if isinstance(obj, dict) and "id" in obj:
+        cand = str(obj["id"])
+        if _is_valid_uuid(cand):
+            return cand
+
+    # Common custom key
+    if isinstance(obj, dict) and "dataset_uuid" in obj:
+        cand = str(obj["dataset_uuid"])
+        if _is_valid_uuid(cand):
+            return cand
+
+    # Nested wrappers we sometimes see
+    if isinstance(obj, dict):
+        for key in ("stac", "feature", "record", "payload"):
+            sub = obj.get(key)
+            if isinstance(sub, dict):
+                cand = _extract_uuid_from_parsed(sub)
+                if cand:
+                    return cand
+
+    # If the parsed value is just a string, it might already be a UUID
+    if isinstance(obj, str) and _is_valid_uuid(obj):
+        return obj
+
+    return None
+
+
+def _extract_uuid_from_body(body: str) -> Optional[str]:
+    """
+    Accepts SQS message body as:
+      - bare UUID string
+      - JSON-encoded STAC Feature (with "id")
+      - JSON with "dataset_uuid"
+      - SNS envelope with "Message" containing JSON/UUID
+    Returns a clean UUID string or None if not found.
+    """
+    if body is None:
+        return None
+
+    raw = str(body).strip().strip('"').strip("'")
+
+    # Fast path: body is already a UUID
+    if _is_valid_uuid(raw):
+        return raw
+
+    # Try JSON decode
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return None
+
+    # Some producers double-encode
+    if isinstance(parsed, str):
+        return _extract_uuid_from_body(parsed)
+
+    return _extract_uuid_from_parsed(parsed)
+
+
 def get_uuid_iterator_from_sqs(queue_url: str, max_empty_polls: int = 10) -> Iterator[Tuple[str, str]]:
-    """Yields (UUID, ReceiptHandle) tuples from an SQS queue."""
+    """Yields (UUID, ReceiptHandle) tuples from an SQS queue.
+
+    Only yields when a valid UUID can be extracted. Messages that cannot be
+    parsed are left on the queue (visibility timeout will expire) and a warning
+    is logged for investigation.
+    """
     sqs = boto3.client("sqs")
     empty_poll_count = 0
     while empty_poll_count < max_empty_polls:
         response = sqs.receive_message(
-            QueueUrl=queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=20
+            QueueUrl=queue_url,
+            MaxNumberOfMessages=10,
+            WaitTimeSeconds=20,
+            MessageAttributeNames=["All"],
+            AttributeNames=["All"],
         )
         messages = response.get("Messages", [])
         if not messages:
             empty_poll_count += 1
-            logger.info("No messages in queue. Empty poll count: %d/%d.", empty_poll_count, max_empty_polls)
+            logger.info(
+                "No messages in queue. Empty poll count: %d/%d.",
+                empty_poll_count, max_empty_polls
+            )
             continue
         
         empty_poll_count = 0  # Reset on message receipt
         for msg in messages:
-            yield msg["Body"], msg["ReceiptHandle"]
+            body = msg.get("Body", "")
+            receipt = msg.get("ReceiptHandle")
+            uuid_str = _extract_uuid_from_body(body)
+
+            if uuid_str and _is_valid_uuid(uuid_str):
+                yield uuid_str, receipt
+            else:
+                trunc = (body[:200] + "…") if isinstance(body, str) and len(body) > 200 else body
+                logger.warning(
+                    "SQS message did not contain a valid UUID; leaving it on the queue. "
+                    "MessageId=%s Body=%r",
+                    msg.get("MessageId"), trunc
+                )
 
     logger.warning("Exiting after %d consecutive empty polls.", max_empty_polls)
 
