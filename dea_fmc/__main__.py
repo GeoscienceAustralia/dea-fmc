@@ -60,6 +60,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class DatasetNotIndexedError(RuntimeError):
+    """Raised when an ARD dataset UUID is not yet present in the ODC index."""
+    pass
 
 # --- Core Classification and Data Handling ---
 
@@ -263,8 +266,14 @@ def process_dataset(dataset_uuid: str, process_cfg: Dict[str, Any], dc: datacube
     # 1. Load dataset and apply filters
     dataset = dc.index.datasets.get(dataset_uuid)
     if not dataset:
-        logger.error("Could not find dataset with UUID: %s", dataset_uuid)
-        return
+        # Critical: do NOT treat this as success.
+        # Raise so run_from_sqs can leave the message on the queue.
+        logger.warning(
+            "Dataset %s not found in ODC index. "
+            "Likely not indexed yet – will retry later by not deleting the SQS message.",
+            dataset_uuid,
+        )
+        raise DatasetNotIndexedError(f"Dataset {dataset_uuid} not found in index")
 
     #if abs(dataset.metadata_doc["properties"]["gqa:abs_iterative_mean_xy"]) > 1:
     #    logger.info("Dataset %s failed GQA filter.", dataset_uuid)
@@ -569,10 +578,35 @@ def run_from_sqs(queue_url: str, process_cfg_url: str, overwrite: bool) -> None:
             try:
                 logger.info("Processing dataset UUID: %s", uuid)
                 process_dataset(uuid, process_cfg, dc, model, overwrite)
-                sqs_client.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
-                logger.info("Successfully processed and deleted message for %s", uuid)
+
+                # Only delete when we've actually processed successfully
+                sqs_client.delete_message(
+                    QueueUrl=queue_url,
+                    ReceiptHandle=receipt_handle,
+                )
+                logger.info(
+                    "Successfully processed and deleted message for %s",
+                    uuid,
+                )
+
+            except DatasetNotIndexedError as e:
+                # ARD not indexed yet – leave message on queue for retry
+                logger.warning(
+                    "Dataset %s is not yet present in ODC index: %s. "
+                    "Leaving SQS message undeleted so it can be retried "
+                    "after indexing completes.",
+                    uuid,
+                    str(e),
+                )
+                # Do NOT delete the message
+                continue
+
             except Exception:
-                logger.exception("Processing failed for UUID %s. Message will not be deleted.", uuid)
+                # Some other failure – still don't delete, so we can investigate / retry / DLQ
+                logger.exception(
+                    "Processing failed for UUID %s. Message will not be deleted.",
+                    uuid,
+                )
                 continue
     finally:
         if os.path.exists(local_model_path):
