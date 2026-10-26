@@ -14,7 +14,7 @@ Bottleneck==1.4.2
 branca==0.8.1
 cachetools==5.5.0
 cattrs==24.1.2
-certifi==2024.12.14
+certifi==2026.10.19
 cffi==1.17.1
 cftime==1.6.4.post1
 charset-normalizer==3.4.1
