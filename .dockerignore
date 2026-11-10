@@ -1,0 +1,17 @@
+# Local Python environments and caches
+.venv/
+.venv*/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+*.pyc
+
+# SR18385 recovery investigation
+sr18385_*
+sr18385-*
+october_fmc_*
+
+# Temporary files
+*.sqlite
+*.log
+*.tmp
