@@ -93,50 +93,94 @@ def classify_fmc(data: xr.Dataset, model: Any) -> xr.Dataset:
     )
 
 
+
 def generate_thumbnail(masked_data: xr.Dataset, output_path: str) -> None:
     """
-    Generate a thumbnail image from masked data using a custom colormap,
-    after compressing the data by a factor of 100 by merging pixels.
-    """
-    colours = [(0.87, 0, 0), (1, 1, 0.73), (0.165, 0.615, 0.957)]  # Red, Yellow, Blue
-    cmap = LinearSegmentedColormap.from_list("fmc", colours, N=256)
-    
-    # Extract the data as a NumPy array
-    original_data = masked_data.fmc.squeeze().to_numpy()
+    Generate an FMC thumbnail.
 
-    # --- Compression Step ---
-    # To compress by 100x, we downsample by 10x in each dimension (10*10=100)
-    compression_factor = 10
+    Preserve 10x downsampling for normal scenes, but avoid
+    downsampling small-footprint scenes to zero pixels.
+    """
+    colours = [
+        (0.87, 0, 0),
+        (1, 1, 0.73),
+        (0.165, 0.615, 0.957),
+    ]
+    cmap = LinearSegmentedColormap.from_list("fmc", colours, N=256)
+
+    # Remove only a singleton time dimension, retaining spatial axes.
+    fmc = masked_data.fmc
+    if "time" in fmc.dims:
+        if fmc.sizes["time"] != 1:
+            raise ValueError("Expected a single time slice for FMC thumbnail")
+        fmc = fmc.isel(time=0, drop=True)
+
+    original_data = fmc.to_numpy()
+
+    if original_data.ndim != 2:
+        raise ValueError(
+            f"Expected a 2D FMC raster, got {original_data.shape}"
+        )
+
     original_height, original_width = original_data.shape
 
-    # Calculate the new dimensions for the compressed image
+    if original_height == 0 or original_width == 0:
+        raise ValueError(
+            f"Cannot generate thumbnail from empty raster: "
+            f"{original_data.shape}"
+        )
+
+    # Keep existing compression for normal scenes.
+    # Tiny scenes must not be reduced to zero pixels.
+    small_scene = min(original_height, original_width) < 10
+    compression_factor = 1 if small_scene else 10
+
     new_height = original_height // compression_factor
     new_width = original_width // compression_factor
 
-    # Crop the data to ensure its dimensions are perfectly divisible by the factor
-    cropped_data = original_data[:new_height * compression_factor, :new_width * compression_factor]
+    cropped_data = original_data[
+        :new_height * compression_factor,
+        :new_width * compression_factor,
+    ]
 
-    # Reshape the array into blocks of (10x10) and compute the mean of each block.
-    # This effectively "merges" the pixels.
     compressed_data = cropped_data.reshape(
-        new_height, compression_factor, new_width, compression_factor
+        new_height,
+        compression_factor,
+        new_width,
+        compression_factor,
     ).mean(axis=(1, 3))
 
-    data_to_plot = compressed_data
-    # --- End of Compression Step ---
-
-    height, width = data_to_plot.shape
+    height, width = compressed_data.shape
     dpi = 100
 
-    fig, ax = plt.subplots(figsize=(width / dpi, height / dpi), dpi=dpi)
-    ax.imshow(data_to_plot, cmap=cmap, interpolation="none")
-    ax.axis("off")
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    # Ensure tiny scenes have a nonzero, usable image canvas.
+    fig_width = max(width / dpi, 1.0) if small_scene else width / dpi
+    fig_height = max(height / dpi, 1.0) if small_scene else height / dpi
 
-    fig.savefig(
-        output_path, dpi=dpi, bbox_inches="tight", pad_inches=0, format="jpg"
+    fig, ax = plt.subplots(
+        figsize=(fig_width, fig_height),
+        dpi=dpi,
     )
-    plt.close(fig)
+
+    try:
+        ax.imshow(
+            compressed_data,
+            cmap=cmap,
+            interpolation="none",
+        )
+        ax.axis("off")
+        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+        fig.savefig(
+            output_path,
+            dpi=dpi,
+            bbox_inches=None if small_scene else "tight",
+            pad_inches=0,
+            format="jpg",
+        )
+    finally:
+        plt.close(fig)
+
 
 
 # --- Metadata Generation ---
